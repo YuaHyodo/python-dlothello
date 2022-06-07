@@ -2,41 +2,44 @@
 from concurrent.futures import ThreadPoolExecutor
 
 class BasePlayer:
-    def __init__(self):
+    def __init__(self):#初期化
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.future = None
 
-    def usi(self):
+    def usi(self):#usiコマンドが来た時に動く部分
         pass
 
-    def usinewgame(self):
+    def usinewgame(self):#usinewgameコマンドが来た際に動く部分
         pass
 
-    def setoption(self, args):
+    def setoption(self, args):#setoptionコマンドが来た際に動く部分
         pass
 
-    def isready(self):
+    def isready(self):#isreadyコマンドが来た際に動く部分
         pass
 
-    def position(self, sfen, usi_moves):
+    def position(self, sfen, usi_moves):#positionコマンドが来た際に動く部分
         pass
 
     def set_limits(self, btime=None, wtime=None, byoyomi=None, binc=None, winc=None, nodes=None, infinite=False, ponder=False):
+        """
+        goコマンドについてくる持ち時間設定から、今回の手番で使う時間を決める関数
+        """
         pass
 
-    def go(self):
+    def go(self):#goコマンドが来た時に動く関数
         pass
 
-    def stop(self):
+    def stop(self):#stopコマンドが来た際に動く関数
         pass
 
-    def ponderhit(self, last_limits):
+    def ponderhit(self, last_limits):#ponderhitコマンドが来た際に動く関数
         pass
 
-    def quit(self):
+    def quit(self):#quitコマンドが来た際に動く関数
         pass
 
-    def run(self):
+    def run(self):#メイン
         while True:
             cmd_line = input().strip()
             cmd = cmd_line.split(' ', 1)
@@ -44,17 +47,22 @@ class BasePlayer:
             if cmd[0] == 'usi':
                 self.usi()
                 print('usiok', flush=True)
+                
             elif cmd[0] == 'setoption':
                 option = cmd[1].split(' ')
                 self.setoption(option)
+                
             elif cmd[0] == 'isready':
                 self.isready()
                 print('readyok', flush=True)
+                
             elif cmd[0] == 'usinewgame':
                 self.usinewgame()
+                
             elif cmd[0] == 'position':
                 args = cmd[1].split('moves')
                 self.position(args[0].strip(), args[1].split() if len(args) > 1 else [])
+                
             elif cmd[0] == 'go':
                 kwargs = {}
                 if len(cmd) > 1:
@@ -78,17 +86,21 @@ class BasePlayer:
                     if need_print_bestmove:
                         print('bestmove ' + bestmove + (' ponder ' + ponder_move if ponder_move else ''), flush=True)
                     return bestmove, ponder_move
+                
                 self.future = self.executor.submit(go_and_print_bestmove)
+                
             elif cmd[0] == 'stop':
                 need_print_bestmove = False
                 self.stop()
                 bestmove, _ = self.future.result()
                 print('bestmove ' + bestmove, flush=True)
+                
             elif cmd[0] == 'ponderhit':
                 last_limits['ponder'] = False
                 self.ponderhit(last_limits)
                 bestmove, ponder_move = self.future.result()
                 print('bestmove ' + bestmove + (' ponder ' + ponder_move if ponder_move else ''), flush=True)
+                
             elif cmd[0] == 'quit':
                 self.quit()
                 break
