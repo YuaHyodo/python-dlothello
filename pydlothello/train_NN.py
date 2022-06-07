@@ -16,6 +16,14 @@ class Train:
 
     def show_Graph(self, history):
         #まだ
+        history = history.history
+        plt.plot(history['loss'], label='Train_loss')
+        plt.plot(history['policy_loss'], label='Train_policy_loss')
+        plt.plot(history['value_loss'], label='Train_value_loss')
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.legend(loc='best')
+        plt.show()
         return
 
     def main(self, data_path, model_file):
@@ -26,7 +34,7 @@ class Train:
         """
         #でばっぐ用
         input_features = np.random.uniform(1, -1, (1000, 8, 8, 2))
-        policy_labels = np.random.unifom(1, -1, (1000, 60))
+        policy_labels = np.random.uniform(1, -1, (1000, 60))
         value_labels = np.random.uniform(1, -1, (1000,))
         """
         model = self.nn.make()#未学習モデルを用意
