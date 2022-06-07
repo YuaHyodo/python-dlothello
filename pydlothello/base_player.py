@@ -1,6 +1,10 @@
 ﻿import time
 from concurrent.futures import ThreadPoolExecutor
 
+"""
+このBasePlayerを使ってプレーヤーを作ると便利
+"""
+
 class BasePlayer:
     def __init__(self):#初期化
         self.executor = ThreadPoolExecutor(max_workers=1)
