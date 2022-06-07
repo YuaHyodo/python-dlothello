@@ -15,7 +15,7 @@ class NN:
     self.filter_size = (3, 3)
     self.res_filters = 64#ResBlockのフィルター数
     self.res_blocks = 5#ResBlockの数
-    self.dense_units = 64#全結合層のニューロン巣
+    self.dense_units = 64#全結合層のニューロン数
     self.dense_layers = 2#全結合層の数
     self.output_policy = 60#ポリシー出力
     self.output_value = 1#バリュー出力
@@ -46,7 +46,7 @@ class NN:
     
     #ここから分化する
     #ポリシーヘッド
-    P = L.Dense(self.dense_units)(x)#ポリシーヘッドに接続
+    P = L.Dense(self.dense_units)(x)
     P = L.BatchNormalization()(P)
     P = L.ReLU()(P)
     for i in range(self.dense_layers):
@@ -57,7 +57,7 @@ class NN:
     P = L.Activation('softmax', name='policy')(P)#ポリシーヘッド終着点
     
     #バリューヘッド
-    V = L.Dense(self.dense_units)(x)#バリューヘッドに接続
+    V = L.Dense(self.dense_units)(x)
     V = L.BatchNormalization()(V)
     V = L.ReLU()(V)
     for i in range(self.dense_layers):
