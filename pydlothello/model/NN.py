@@ -63,4 +63,4 @@ class NN:
     
     #modelを作る
     model = tf.keras.models.Model(inputs=INPUT, outputs=[p, v])
-    return
+    return model
