@@ -11,6 +11,18 @@ class BasePlayer:
 
     def usinewgame(self):#usinewgameコマンドが来た際に動く部分
         pass
+    
+    def score_scale_and_type(self):
+        """
+        GUIなどが評価値のスケールや形式などをエンジンに問い合わせるための拡張コマンド
+        形式は[WP(勝率), stone(石の差), other(その他)]から、
+        スケールは最小値と最大値を返すことになっている。
+        
+        返答は
+        scoretype [形式] min [最小値] max [最大値]になる
+        例: scoretype WP min 0 max 100
+        """
+        pass
 
     def setoption(self, args):#setoptionコマンドが来た際に動く部分
         pass
@@ -51,6 +63,9 @@ class BasePlayer:
             elif cmd[0] == 'setoption':
                 option = cmd[1].split(' ')
                 self.setoption(option)
+                
+            elif cmd[0] == 'score_scale_and_type':
+                self.score_scale_and_type()
                 
             elif cmd[0] == 'isready':
                 self.isready()
