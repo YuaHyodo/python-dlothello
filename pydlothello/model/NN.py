@@ -24,6 +24,7 @@ class NN:
     x = L.Conv2D(self.res_filters, self.filter_size, padding='same', use_bias=False)(INPUT)
     x = L.BatchNormalization()(x)
     x = L.PReLU()(x)
+    
     for i in range(self.res_blocks):
       #ResBlock始まり
       sc = x#ショートカットコネクション用
@@ -35,10 +36,12 @@ class NN:
       x = L.Add([x, sc])#ショートカットコネクション
       x = L.PReLU()(x)
       #ResBlock終わり
+     
     x = L.Flatten()(x)
     x = L.Dense(self.dense_units)(x)
     x = L.BatchNormalization()(x)
     x = L.PReLU()(x)
+    
     #ここから分化する
     #ポリシーヘッド
     P = L.Dense(self.dense_units)(x)#ポリシーヘッドに接続
@@ -50,6 +53,7 @@ class NN:
       P = L.PReLU()(P)
     P = L.Dense(self.output)(P)
     P = L.Activation('softmax', name='policy')(P)#ポリシーヘッド終着点
+    
     #バリューヘッド
     V = L.Dense(self.dense_units)(x)#バリューヘッドに接続
     V = L.BatchNormalization()(V)
