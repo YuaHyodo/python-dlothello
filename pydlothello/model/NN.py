@@ -2,7 +2,7 @@
 このファイルでニューラルネットを作る
 Tensorflowを使う
 """
-import tensorflow as tf#2.2.0
+import tensorflow as tf#ver2.2.0
 import tensorflow.keras.layers as L
 
 class NN:
