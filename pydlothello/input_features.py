@@ -12,10 +12,6 @@ def make_feature(board):
     return planes.transpose((1, 2, 0))
 
 def make_feature_for_train(board):#教師データ水増し用
-    """
-    やっていることは普通のこと(盤を回してデータの水増しをする)だが、
-    クソコードなので参考にはするな
-    """
     planes = np.empty((4, 2, 8, 8), dtype=np.float32)
     board.piece_planes(planes[0])
     board.piece_planes_rotate90(planes[1])

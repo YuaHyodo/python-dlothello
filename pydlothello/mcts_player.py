@@ -56,7 +56,7 @@ DEFAULT_C_PUCT: このパラメータの値を調整することで「利用」�
 
 AlphaZeroなどではこの数字を探索の進み具合で動的に調整するようになっている。
 本家dlshogi(探索部がC++のやつ)にも導入されていて、強くなることが確認されている。
-気になる人は自分で導入してみてほしい。
+気になる人は自分で実装してみてほしい。
 =>参考: https://tadaoyamaoka.hatenablog.com/entry/2018/12/13/001953
 
 ==================================================
@@ -90,6 +90,18 @@ QUEUING = -1
 DISCARDED = -2
 # Virtual Loss
 VIRTUAL_LOSS = 3
+
+def noise_plus(policy, temp):
+    """
+    面倒なのでとりあえず乱数を加えて誤魔化す
+    """
+    temp *= 0.1
+    if temp >= 1:
+        temp = 1
+    noise = np.random.normal(0, temp, len(policy))
+    output = policy + noise
+    output /= sum(output)
+    return output
 
 # 温度パラメータを適用した確率分布を取得
 def softmax_temperature_with_normalize(logits, temperature):
@@ -264,7 +276,7 @@ class MCTSPlayer(BasePlayer):
         """
         self.infinite_think = (infinite or ponder)
         self.STOP = False
-        self.time_limit = 10
+        self.time_limit = 5
         return
 
     def go(self):
@@ -508,7 +520,7 @@ class MCTSPlayer(BasePlayer):
         下の式の解説
         
         1番目の項は「利用」である。
-        比率が高いと、すでに勝率(実際は価値の合計)が高いノードが選ばれやすくなる
+        比率が高いと、すでに勝率(実際は価値の合計を訪問回数で割ったもの)が高いノードが選ばれやすくなる
         
         2番目の項は「探索」である。
         比率が高いと、まだ選ばれていないノードが選ばれやすくなる
@@ -613,7 +625,7 @@ class MCTSPlayer(BasePlayer):
                 p[j] = policy[move]
                 
             # ノードの値を更新
-            current_node.policy = p
+            current_node.policy = noise_plus(p, self.temperature)
             current_node.value = float(value)
 
 if __name__ == '__main__':
