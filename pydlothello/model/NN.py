@@ -11,13 +11,20 @@ class NN:
   PolicyはMiniMax系の探索部でのmove ordering等でも使える
   """
   def __init__(self):
+    """
+    一般的にニューラルネットはラベルの数が少ないほうが精度が上がるといわれている。
+    ので、通常なら合法手に入らないd4, d5, e4, e5に対応する出力は無いほうが良いのだが、
+    通常ではありえない局面で対戦が始まる大会やイベントを開催するときに
+    すぐに対応できるようにするために強さを犠牲にしてあえて入れている。
+    """
     self.input_shape = (8, 8, 2)#8 * 8の盤面が黒と白の分ある
     self.filter_size = (3, 3)
     self.res_filters = 64#ResBlockのフィルター数
     self.res_blocks = 5#ResBlockの数
     self.dense_units = 64#全結合層のニューロン数
     self.dense_layers = 2#全結合層の数
-    self.output_policy = 60#ポリシー出力
+    #self.output_policy = 60#ポリシー出力(d4, d5, e4, e5以外のマスに対応している版)
+    self.output_policy = 64#ポリシー出力(変則ルールに対応するためにすべてのマスに着手できる)
     self.output_value = 1#バリュー出力
     
   def make(self):
@@ -77,7 +84,9 @@ if __name__ == '__main__':
   nn = NN()
   test_model = nn.make()
   test_model.summary()
-  test_data = R.uniform(0.9, -0.9, (1, 8, 8, 2))
+  test_data = R.uniform(0.9, -0.9, (2, 8, 8, 2))
   print(test_data.shape)
   output = test_model.predict(test_data)
   print(output)
+  print(output[0])
+  print(output[1])

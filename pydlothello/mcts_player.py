@@ -1,29 +1,79 @@
-﻿import numpy as np
-import torch
+﻿"""
+python-dlshogi2の改造
+オセロに対応させ、兵頭好みの改造を施し、一部の機能を削った
+USI-Xオセロ版対応(予定)
 
-from cshogi import Board, BLACK, NOT_REPETITION, REPETITION_DRAW, REPETITION_WIN, REPETITION_SUPERIOR, move_to_usi
-from pydlshogi2.features import FEATURES_NUM, make_input_features, make_move_label
-from pydlshogi2.uct.uct_node import NodeTree
-from pydlshogi2.network.policy_value_resnet import PolicyValueNetwork
-from pydlshogi2.player.base_player import BasePlayer
+USI-Xの概要
+やねうらお氏が提案する、対局ゲーム標準通信プロトコル
+USIという将棋用の通信プロトコルがベースになっている
+これを使うと、USI対応の将棋AI用のフレームワーク等の流用が簡単という大きなメリットがある
+
+USI-Xについては、ここを参照のこと: http://yaneuraou.yaneu.com/2022/06/07/standard-communication-protocol-for-games/
+
+上のページで「sfenをofenするなどの変更は絶対にしないでいただきたい」みたいなことが書いてあったり、
+具体例の1つがオセロだったりするのは
+我々が作っていたUOIプロトコルのせいだと思われる。(UOIではsfenにあたるものをofenと呼んでいた)
+※やねうらお氏はブログに書き込む前に上記の意見を兵頭に直接伝えている。
+
+我々が提案するUSI-Xのオセロ版の詳細な仕様ついては、ここを参照のこと: (まだ)
+"""
+import numpy as np
+import creversi as reversi 
+
+from base_player import BasePlayer
+from uct.uct_node import UctNode
+from input_features import make_feature
+from tensorflow.keras.models import load_model
 
 import time
 import math
 
-# デフォルトGPU ID
-DEFAULT_GPU_ID = 0
+#==================
+#邪魔な表示を消す
+import tensorflow as tf
+import warnings
+import os
+warnings.simplefilter('ignore')
+os.environ[ 'TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+tf.get_logger().setLevel('ERROR')
+#==================
+
+"""
+以下では、パラメーターのデフォルト値を決定している
+
+各種パラメータの説明(必要そうなものだけ)
+
+DEFAULT_BATCH_SIZE: 1回の推論で何局面を同時に評価するかを決める。
+値が大きいほど、1度に評価する局面が増える。
+どの値が最適かはCPUとGPUのバランス等で決まるので各自で調べる必要がある。
+慣習として2のN乗がよく使われるらしい。(1, 2, 4, 8, 16, 32, 64, 128, 256・・・)
+
+==================================================
+
+DEFAULT_C_PUCT: このパラメータの値を調整することで「利用」と「探索」のバランスを取る。
+値が大きいほど「探索」を重視する(=広く浅く読む)
+
+AlphaZeroなどではこの数字を探索の進み具合で動的に調整するようになっている。
+本家dlshogi(探索部がC++のやつ)にも導入されていて、強くなることが確認されている。
+気になる人は自分で導入してみてほしい。
+=>参考: https://tadaoyamaoka.hatenablog.com/entry/2018/12/13/001953
+
+==================================================
+
+DEFAULT_TEMPERATURE: ボルツマン分布の「温度」というパラメータ
+ポリシー出力にバラツキを加える。
+値が大きい(=温度が高い)ほどバラツキが大きくなる(=広く浅く探索する)
+
+学習用の教師データを生成する際は通常より温度を高めに設定することをお勧めする。
+"""
+
 # デフォルトバッチサイズ
 DEFAULT_BATCH_SIZE = 32
-# デフォルト投了閾値
-DEFAULT_RESIGN_THRESHOLD = 0.01
 # デフォルトPUCTの定数
 DEFAULT_C_PUCT = 1.0
 # デフォルト温度パラメータ
 DEFAULT_TEMPERATURE = 1.0
-# デフォルト持ち時間マージン(ms)
-DEFAULT_TIME_MARGIN = 1000
-# デフォルト秒読みマージン(ms)
-DEFAULT_BYOYOMI_MARGIN = 100
 # デフォルトPV表示間隔(ms)
 DEFAULT_PV_INTERVAL = 500
 # デフォルトプレイアウト数
@@ -39,7 +89,7 @@ QUEUING = -1
 # 探索を破棄するときの戻り値（数値に意味はない）
 DISCARDED = -2
 # Virtual Loss
-VIRTUAL_LOSS = 1
+VIRTUAL_LOSS = 3
 
 # 温度パラメータを適用した確率分布を取得
 def softmax_temperature_with_normalize(logits, temperature):
@@ -58,6 +108,15 @@ def softmax_temperature_with_normalize(logits, temperature):
 
 # ノード更新
 def update_result(current_node, next_index, result):
+    """
+    ノードを更新する
+    current_nodeは今のノード、
+    next_indexは子ノードのインデックス、
+    resultは探索結果
+
+    現在のノードと子ノードの、累計訪問回数と
+    累計価値に加算する。(バーチャルロスも考慮する)
+    """
     current_node.sum_value += result
     current_node.move_count += 1 - VIRTUAL_LOSS
     current_node.child_sum_value[next_index] += result
@@ -65,19 +124,21 @@ def update_result(current_node, next_index, result):
 
 # 評価待ちキューの要素
 class EvalQueueElement:
-    def set(self, node, color):
-        self.node = node
-        self.color = color
+    def __init__(self, node, is_black_turn):
+        self.node = node#nodeオブジェクト
+        self.is_black_turn = is_black_turn#手番(Trueだと黒番)
 
 class MCTSPlayer(BasePlayer):
     # USIエンジンの名前
-    name = 'python-dlshogi2'
-    # デフォルトチェックポイント
-    DEFAULT_MODELFILE = 'checkpoints/checkpoint.pth'
+    name = 'python-dlothello'
+    #作者の名前
+    auther = 'Y_Hyodo'
+    #デフォルトのモデルファイルのパス
+    DEFAULT_MODELFILE = './model/model_files/py-dlothello_model.h5'
 
     def __init__(self):
         super().__init__()
-        # チェックポイントのパス
+        # モデルファイルのパス
         self.modelfile = self.DEFAULT_MODELFILE
         # モデル
         self.model = None
@@ -89,32 +150,21 @@ class MCTSPlayer(BasePlayer):
         self.current_batch_index = 0
 
         # ルート局面
-        self.root_board = Board()
-        # ゲーム木
-        self.tree = NodeTree()
+        self.root_board = reversi.Board()
+        self.root_node = UctNode()
 
         # プレイアウト回数
         self.playout_count = 0
         # 中断するプレイアウト回数
         self.halt = None
 
-        # GPU ID
-        self.gpu_id = DEFAULT_GPU_ID
-        # デバイス
-        self.device = None
         # バッチサイズ
         self.batch_size = DEFAULT_BATCH_SIZE
 
-        # 投了する勝率の閾値
-        self.resign_threshold = DEFAULT_RESIGN_THRESHOLD
         # PUCTの定数
         self.c_puct = DEFAULT_C_PUCT
         # 温度パラメータ
         self.temperature = DEFAULT_TEMPERATURE
-        # 持ち時間マージン(ms)
-        self.time_margin = DEFAULT_TIME_MARGIN
-        # 秒読みマージン(ms)
-        self.byoyomi_margin = DEFAULT_BYOYOMI_MARGIN
         # PV表示間隔
         self.pv_interval = DEFAULT_PV_INTERVAL
 
@@ -122,166 +172,119 @@ class MCTSPlayer(BasePlayer):
 
     def usi(self):
         print('id name ' + self.name)
+        print('id auther ' + self.auther)
         print('option name USI_Ponder type check default false')
         print('option name modelfile type string default ' + self.DEFAULT_MODELFILE)
-        print('option name gpu_id type spin default ' + str(DEFAULT_GPU_ID) + ' min -1 max 7')
         print('option name batchsize type spin default ' + str(DEFAULT_BATCH_SIZE) + ' min 1 max 256')
-        print('option name resign_threshold type spin default ' + str(int(DEFAULT_RESIGN_THRESHOLD * 100)) + ' min 0 max 100')
         print('option name c_puct type spin default ' + str(int(DEFAULT_C_PUCT * 100)) + ' min 10 max 1000')
         print('option name temperature type spin default ' + str(int(DEFAULT_TEMPERATURE * 100)) + ' min 10 max 1000')
-        print('option name time_margin type spin default ' + str(DEFAULT_TIME_MARGIN) + ' min 0 max 1000')
-        print('option name byoyomi_margin type spin default ' + str(DEFAULT_BYOYOMI_MARGIN) + ' min 0 max 1000')
         print('option name pv_interval type spin default ' + str(DEFAULT_PV_INTERVAL) + ' min 0 max 10000')
         print('option name debug type check default false')
 
     def setoption(self, args):
         if args[1] == 'modelfile':
             self.modelfile = args[3]
-        elif args[1] == 'gpu_id':
-            self.gpu_id = int(args[3])
         elif args[1] == 'batchsize':
             self.batch_size = int(args[3])
-        elif args[1] == 'resign_threshold':
-            self.resign_threshold = int(args[3]) / 100
         elif args[1] == 'c_puct':
             self.c_puct = int(args[3]) / 100
         elif args[1] == 'temperature':
             self.temperature = int(args[3]) / 100
-        elif args[1] == 'time_margin':
-            self.time_margin = int(args[3])
-        elif args[1] == 'byoyomi_margin':
-            self.byoyomi_margin = int(args[3])
         elif args[1] == 'pv_interval':
             self.pv_interval = int(args[3])
         elif args[1] == 'debug':
             self.debug = args[3] == 'true'
 
+    def score_scale_and_type(self):
+        print('scoretype other min -100 max 100')
+        return
+
     # モデルのロード
     def load_model(self):
-        self.model = PolicyValueNetwork()
-        self.model.to(self.device)
-        checkpoint = torch.load(self.modelfile, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model'])
-        # モデルを評価モードにする
-        self.model.eval()
+        self.model = load_model(self.modelfile)
+        return
 
     # 入力特徴量の初期化
     def init_features(self):
-        self.features = torch.empty((self.batch_size, FEATURES_NUM, 9, 9), dtype=torch.float32, pin_memory=(self.gpu_id >= 0))
+        """
+        ニューラルネットに一気に複数の局面を送ったほうがGPUを効率的に使える
+        python-dlshogi2などでは、キューに局面をためておいて、一度にたまった局面を評価することでそれを実現している
+
+        αβ枝狩りなどと、局面をためて評価する工夫は相性がイマイチである
+        Ari shogi(兵頭作の弱小将棋AI)のminimax系探索部(非公開)はその点を多少改善する工夫が施してあるので、
+        余裕があればその技術を搭載した簡易探索部も公開する
+        """
+        self.eval_queue = []#評価待ちのノードが入る
+        self.input_features = []#評価待ち局面の入力特徴量が入る
+        return
 
     def isready(self):
-        # デバイス
-        if self.gpu_id >= 0:
-            self.device = torch.device(f"cuda:{self.gpu_id}")
-        else:
-            self.device = torch.device("cpu")
-
-        # モデルをロード
+        # モデルをロード・準備
         self.load_model()
 
         # 局面初期化
-        self.root_board.reset()
-        self.tree.reset_to_position(self.root_board.zobrist_hash(), [])
+        self.root_board = reversi.Board()
 
         # 入力特徴量と評価待ちキューを初期化
         self.init_features()
-        self.eval_queue = [EvalQueueElement() for _ in range(self.batch_size)]
-        self.current_batch_index = 0
+        return
 
-        # モデルをキャッシュして初回推論を速くする
-        current_node = self.tree.current_head
-        current_node.expand_node(self.root_board)
-        for _ in range(self.batch_size):
-            self.queue_node(self.root_board, current_node)
-        self.eval_node()
+    def set_sfen(self, sfen):
+        """
+        想定しているsfenの形式
+        (UOIのofenの形式)
+        空きマス: -, 黒石: X, 白石: Oで長さ64の盤を表す部分に
+        手番を表すB(黒番), W(白番)をつけた、長さ65の配列
+        その後ろに手数を書いてもいいと思う。(プログラムは無視する)
+        """
+        #sfen => creversiのBoard
+        d = {'B': reversi.BLACK_TURN, 'W': reversi.WHITE_TURN}
+        line = sfen[0:65]
+        turn_of = sfen[65]
+        self.board = reversi.Board(line, d[turn_of])
+        return
 
-    def position(self, sfen, usi_moves):
-        if sfen == 'startpos':
-            self.root_board.reset()
-        elif sfen[:5] == 'sfen ':
-            self.root_board.set_sfen(sfen[5:])
+    def position(self, sfen, usi_moves): 
+        if sfen == 'startpos':#初期局面開始
+            self.root_board = reversi.Board()
+        elif sfen[:5] == 'sfen ':#sfenの局面開始
+            self.set_sfen(sfen)
 
         moves = []
-        for usi_move in usi_moves:
-            move = self.root_board.push_usi(usi_move)
+        for usi_move in usi_moves:#movesの後に続くmoveを再生
+            move = self.root_board.move_from_str(usi_move)
             moves.append(move)
-        self.tree.reset_to_position(self.root_board.zobrist_hash(), moves)
-
+        self.root_node = UctNode()
         if self.debug:
             print(self.root_board)
 
-    def set_limits(self, btime=None, wtime=None, byoyomi=None, binc=None, winc=None, nodes=None, infinite=False, ponder=False):
-        # 探索回数の閾値を設定
-        if infinite or ponder:
-            # infiniteもしくはponderの場合は、探索を打ち切らないため、32ビット整数の最大値を設定する
-            self.halt = 2**31-1
-        elif nodes:
-            # プレイアウト数固定
-            self.halt = nodes
-        else:
-            self.remaining_time, inc = (btime, binc) if self.root_board.turn == BLACK else (wtime, winc)
-            if self.remaining_time is None and byoyomi is None and inc is None:
-                # 時間指定がない場合
-                self.halt = DEFAULT_CONST_PLAYOUT
-            else:
-                self.minimum_time = 0
-                self.remaining_time = int(self.remaining_time) if self.remaining_time else 0
-                inc = int(inc) if inc else 0
-                self.time_limit = self.remaining_time / (14 + max(0, 30 - self.root_board.move_number)) + inc
-                # 秒読みの場合
-                if byoyomi:
-                    byoyomi = int(byoyomi) - self.byoyomi_margin
-                    self.minimum_time = byoyomi
-                    # time_limitが秒読み以下の場合、秒読みに設定
-                    if self.time_limit < byoyomi:
-                        self.time_limit = byoyomi
-                self.extend_time = self.time_limit > self.minimum_time
-                self.halt = None
+    def set_limits(self, btime=None, wtime=None, byoyomi=None, binc=None, winc=None, infinite=False, ponder=False):
+        """
+        とりあえず仮のやつ
+        """
+        self.infinite_think = (infinite or ponder)
+        self.STOP = False
+        self.time_limit = 10
+        return
 
     def go(self):
         # 探索開始時刻の記録
         self.begin_time = time.time()
 
-        # 投了チェック
-        if self.root_board.is_game_over():
-            return 'resign', None
+        if len(list(self.root_board.legal_moves)) <= 1:#パスしか合法手がない
+            return 'pass', None
 
-        # 入玉宣言勝ちチェック
-        if self.root_board.is_nyugyoku():
-            return 'win', None
-
-        current_node = self.tree.current_head
-
-        # 詰みの場合
-        if current_node.value == VALUE_WIN:
-            matemove = self.root_board.mate_move(3)
-            if matemove != 0:
-                print('info score mate 3 pv {}'.format(move_to_usi(matemove)), flush=True)
-                return move_to_usi(matemove), None
-        if not self.root_board.is_check():
-            matemove = self.root_board.mate_move_in_1ply()
-            if matemove:
-                print('info score mate 1 pv {}'.format(move_to_usi(matemove)), flush=True)
-                return move_to_usi(matemove), None
+        current_node = self.root_node
 
         # プレイアウト数をクリア
         self.playout_count = 0
 
         # ルートノードが未展開の場合、展開する
-        if current_node.child_move is None:
+        if not current_node.is_expand:
             current_node.expand_node(self.root_board)
-
-        # 候補手が1つの場合は、その手を返す
-        if self.halt is None and len(current_node.child_move) == 1:
-            if current_node.child_move_count[0] > 0:
-                bestmove, bestvalue, ponder_move = self.get_bestmove_and_print_pv()
-                return move_to_usi(bestmove), move_to_usi(ponder_move) if ponder_move else None
-            else:
-                return move_to_usi(current_node.child_move[0]), None
 
         # ルートノードが未評価の場合、評価する
         if current_node.policy is None:
-            self.current_batch_index = 0
             self.queue_node(self.root_board, current_node)
             self.eval_node()
 
@@ -300,15 +303,11 @@ class MCTSPlayer(BasePlayer):
                     current_node.policy[i],
                     current_node.child_sum_value[i] / current_node.child_move_count[i] if current_node.child_move_count[i] > 0 else 0))
 
-        # 閾値未満の場合投了
-        if bestvalue < self.resign_threshold:
-            return 'resign', None
-
-        return move_to_usi(bestmove), move_to_usi(ponder_move) if ponder_move else None
+        return reversi.move_to_str(bestmove), reversi.move_to_str(ponder_move) if ponder_move else None
 
     def stop(self):
         # すぐに中断する
-        self.halt = 0
+        self.STOP = True
 
     def ponderhit(self, last_limits):
         # 探索開始時刻の記録
@@ -324,7 +323,27 @@ class MCTSPlayer(BasePlayer):
     def quit(self):
         self.stop()
 
+    def is_win(self, board):
+        """
+        手番側が勝ったらTrue
+        引き分けならNone
+        負けたらFalseを返す
+        """
+        Sum = board.piece_sum()#合計石数
+        my = board.piece_num()#手番側の石数
+        if (Sum - my) == my:#引き分け
+            return None
+        if (Sum - my) < my:#勝ち
+            return True
+        return False
+
     def search(self):
+        """
+        探索は、以下のような手順で行われている
+        1: ゲーム木を探索経路を記録しながら進み、評価する局面をキューにためる
+        2: ニューラルネットで評価を行う
+        3: ゲーム木の葉からrootに向かって評価値などを伝達する(ゲーム木を更新する)
+        """
         self.last_pv_print_time = 0
 
         # 探索経路のバッチ
@@ -344,7 +363,7 @@ class MCTSPlayer(BasePlayer):
 
                 # 探索
                 trajectories_batch.append([])
-                result = self.uct_search(board, self.tree.current_head, trajectories_batch[-1])
+                result = self.uct_search(board, self.root_node, trajectories_batch[-1])
 
                 if result != DISCARDED:
                     # 探索回数を1回増やす
@@ -379,9 +398,9 @@ class MCTSPlayer(BasePlayer):
                     current_node, next_index = trajectories[i]
                     if result is None:
                         # 葉ノード
-                        result = 1.0 - current_node.child_node[next_index].value
+                        result = current_node.child_node[next_index].value * -1
                     update_result(current_node, next_index, result)
-                    result = 1.0 - result
+                    result = result * -1
 
             # 探索を打ち切るか確認
             if self.check_interruption():
@@ -396,13 +415,21 @@ class MCTSPlayer(BasePlayer):
 
     # UCT探索
     def uct_search(self, board, current_node, trajectories):
-        # 子ノードのリストが初期化されていない場合、初期化する
-        if not current_node.child_node:
-            current_node.child_node = [None for _ in range(len(current_node.child_move))]
+        """
+        resultの数字が本家と違ったり、
+        「1.0 - result」と書いてあったところが「result * -1」になっていたりするのは、
+        バリュー出力層の活性化関数が違うから。
+        (本家はsigmoid、こちらはtanh)
+
+        パス関連の部分はまだなので、とりあえずは負け扱いにしている
+        """
+        # 未展開なら展開
+        if not current_node.is_expand:
+            current_node.expand(self.board)
         # UCB値が最大の手を求める
         next_index = self.select_max_ucb_child(current_node)
         # 選んだ手を着手
-        board.push(current_node.child_move[next_index])
+        board.move(current_node.child_move[next_index])
 
         # Virtual Lossを加算
         current_node.move_count += VIRTUAL_LOSS
@@ -416,37 +443,28 @@ class MCTSPlayer(BasePlayer):
             # ノードの作成
             child_node = current_node.create_child_node(next_index)
 
-            # 千日手チェック
-            draw = board.is_draw()
-            if draw != NOT_REPETITION:
-                if draw == REPETITION_DRAW:
-                    # 千日手
+            if board.is_game_over():#終局チェック
+                win = self.is_win(board)
+                if win:#手番側が勝った
+                    child_node.value = VALUE_WIN
+                    result = -1
+                elif win == None:#引き分け
                     child_node.value = VALUE_DRAW
-                    result = 0.5
-                elif draw == REPETITION_WIN or draw == REPETITION_SUPERIOR:
-                    # 連続王手の千日手で勝ち、もしくは優越局面の場合
-                    child_node.value = VALUE_WIN
-                    result = 0.0
-                else:  # draw == REPETITION_LOSE or draw == REPETITION_INFERIOR
-                    # 連続王手の千日手で負け、もしくは劣等局面の場合
+                    result = 0
+                else:#負けた
                     child_node.value = VALUE_LOSE
-                    result = 1.0
+                    result = 1
             else:
-                # 入玉宣言と3手詰めチェック
-                if board.is_nyugyoku() or board.mate_move(3):
-                    child_node.value = VALUE_WIN
-                    result = 0.0
+                # 候補手を展開する
+                child_node.expand_node(board)
+                # 候補手がない場合
+                if len(child_node.child_move) <= 1:
+                    child_node.value = VALUE_LOSE
+                    result = 1
                 else:
-                    # 候補手を展開する
-                    child_node.expand_node(board)
-                    # 候補手がない場合
-                    if len(child_node.child_move) == 0:
-                        child_node.value = VALUE_LOSE
-                        result = 1.0
-                    else:
-                        # ノードを評価待ちキューに追加
-                        self.queue_node(board, child_node)
-                        return QUEUING
+                    # ノードを評価待ちキューに追加
+                    self.queue_node(board, child_node)
+                    return QUEUING
         else:
             # 評価待ちのため破棄する
             next_node = current_node.child_node[next_index]
@@ -455,13 +473,13 @@ class MCTSPlayer(BasePlayer):
 
             # 詰みと千日手チェック
             if next_node.value == VALUE_WIN:
-                result = 0.0
+                result = -1
             elif next_node.value == VALUE_LOSE:
-                result = 1.0
+                result = 1
             elif next_node.value == VALUE_DRAW:
-                result = 0.5
-            elif len(next_node.child_move) == 0:
-                result = 1.0
+                result = 0
+            elif len(next_node.child_move) <= 0:
+                result = 1
             else:
                 # 手番を入れ替えて1手深く読む
                 result = self.uct_search(board, next_node, trajectories)
@@ -472,10 +490,13 @@ class MCTSPlayer(BasePlayer):
         # 探索結果の反映
         update_result(current_node, next_index, result)
 
-        return 1.0 - result
+        return result * -1
 
     # UCB値が最大の手を求める
     def select_max_ucb_child(self, node):
+        """
+        注意: ここを変に改造するとかなり弱くなる(実験済み)
+        """
         q = np.divide(node.child_sum_value, node.child_move_count,
             out=np.zeros(len(node.child_move), np.float32),
             where=node.child_move_count != 0)
@@ -483,7 +504,19 @@ class MCTSPlayer(BasePlayer):
             u = 1.0
         else:
             u = np.sqrt(np.float32(node.move_count)) / (1 + node.child_move_count)
-        ucb = q + self.c_puct * u * node.policy
+        """
+        下の式の解説
+        
+        1番目の項は「利用」である。
+        比率が高いと、すでに勝率(実際は価値の合計)が高いノードが選ばれやすくなる
+        
+        2番目の項は「探索」である。
+        比率が高いと、まだ選ばれていないノードが選ばれやすくなる
+        ニューラルネットのpolicy出力も考慮している
+
+        バランスの調整はc_puctというパラメータで行う
+        """
+        ucb = (q) + (self.c_puct * u * node.policy)
 
         return np.argmax(ucb)
 
@@ -493,24 +526,21 @@ class MCTSPlayer(BasePlayer):
         finish_time = time.time() - self.begin_time
 
         # 訪問回数最大の手を選択する
-        current_node = self.tree.current_head
+        current_node = self.root_node
         selected_index = np.argmax(current_node.child_move_count)
 
         # 選択した着手の勝率の算出
         bestvalue = current_node.child_sum_value[selected_index] / current_node.child_move_count[selected_index]
-
+        score = int(bestvalue * 100)
+        if score >= 100:
+            score = 100
+        if score <= -100:
+            score = -100
+        
         bestmove = current_node.child_move[selected_index]
 
-        # 勝率を評価値に変換
-        if bestvalue == 1.0:
-            cp = 30000
-        elif bestvalue == 0.0:
-            cp = -30000
-        else:
-            cp = int(-math.log(1.0 / bestvalue - 1.0) * 600)
-
         # PV
-        pv = move_to_usi(bestmove)
+        pv = reversi.move_to_str(bestmove)
         ponder_move = None
         pv_node = current_node
         while pv_node.child_node:
@@ -518,85 +548,49 @@ class MCTSPlayer(BasePlayer):
             if pv_node is None or pv_node.child_move is None or pv_node.move_count == 0:
                 break
             selected_index = np.argmax(pv_node.child_move_count)
-            pv += ' ' + move_to_usi(pv_node.child_move[selected_index])
+            pv += ' ' + reversi.move_to_str(pv_node.child_move[selected_index])
             if ponder_move is None:
                 ponder_move = pv_node.child_move[selected_index]
 
-        print('info nps {} time {} nodes {} score cp {} pv {}'.format(
+        print('info nps {} time {} nodes {} score {} pv {}'.format(
             int(self.playout_count / finish_time) if finish_time > 0 else 0,
-            int(finish_time * 1000),
+            int(finish_time),
             current_node.move_count,
-            cp, pv), flush=True)
+            score, pv), flush=True)
 
         return bestmove, bestvalue, ponder_move
 
     # 探索を打ち切るか確認
     def check_interruption(self):
-        # プレイアウト数数が閾値を超えている
-        if self.halt is not None:
-            return self.playout_count >= self.halt
-
-        # 候補手が1つの場合、中断する
-        current_node = self.tree.current_head
-        if len(current_node.child_move) == 1:
+        """
+        この関数がTrueを返すと探索を打ち切るので、それを考えて処理を書く。
+        面倒なのでテキトーなやつを用意しておく
+        """
+        if self.STOP:#すぐに停止
             return True
-
-        # 消費時間
-        spend_time = int((time.time() - self.begin_time) * 1000)
-
-        # 消費時間が短すぎる場合、もしくは秒読みの場合は打ち切らない
-        if spend_time * 10 < self.time_limit or spend_time < self.minimum_time:
+        if self.infinite_think:#無制限に考えていい
             return False
-
-        # 探索回数が最も多い手と次に多い手を求める
-        child_move_count = current_node.child_move_count
-        second_index, first_index = np.argpartition(child_move_count, -2)[-2:]
-        second, first = child_move_count[[second_index, first_index]]
-
-        # 探索速度から残りの時間で探索できるプレイアウト数を見積もる
-        rest = int(self.playout_count * ((self.time_limit - spend_time) / spend_time))
-
-        # 残りの探索で次善手が最善手を超える可能性がある場合は打ち切らない
-        if first - second <= rest:
+        spend_time = int(time.time() - self.begin_time)
+        if spend_time < self.time_limit:#まだ時間がある
             return False
-
-        # 探索延長
-        #   21手目以降かつ、残り時間がある場合、
-        #   最善手の探索回数が次善手の探索回数の1.5倍未満
-        #   もしくは、勝率が逆なら探索延長する
-        if self.extend_time and \
-           self.root_board.move_number > 20 and \
-           self.remaining_time > self.time_limit * 2 and \
-           (first < second * 1.5 or
-            current_node.child_sum_value[first_index] / child_move_count[first_index] < current_node.child_sum_value[second_index] / child_move_count[second_index]):
-            # 探索時間を2倍に延長
-            self.time_limit *= 2
-            # 探索延長は1回のみ
-            self.extend_time = False
-            print('info string extend_time')
-            return False
-
         return True
 
     # 入力特徴量の作成
     def make_input_features(self, board):
-        make_input_features(board, self.features.numpy()[self.current_batch_index])
+        self.input_features.append(make_feature(board))
+        return
 
     # ノードをキューに追加
     def queue_node(self, board, node):
         # 入力特徴量を作成
         self.make_input_features(board)
-
         # ノードをキューに追加
-        self.eval_queue[self.current_batch_index].set(node, board.turn)
-        self.current_batch_index += 1
+        self.eval_queue.append(EvalQueueElement(node, board.turn))
 
     # 推論
     def infer(self):
-        with torch.no_grad():
-            x = self.features[0:self.current_batch_index].to(self.device)
-            policy_logits, value_logits = self.model(x)
-            return policy_logits.cpu().numpy(), torch.sigmoid(value_logits).cpu().numpy()
+        nn_output = self.model.predict(np.array(self.input_features), batch_size=len(self.input_features))#推論
+        return nn_output[0], nn_output[1]
 
     # 着手を表すラベル作成
     def make_move_label(self, move, color):
@@ -607,22 +601,19 @@ class MCTSPlayer(BasePlayer):
         # 推論
         policy_logits, values = self.infer()
 
-        for i, (policy_logit, value) in enumerate(zip(policy_logits, values)):
+        for i in range(len(values)):
+            policy = policy_logits[i]
+            value = values[i]
             current_node = self.eval_queue[i].node
-            color = self.eval_queue[i].color
 
             # 合法手一覧
-            legal_move_probabilities = np.empty(len(current_node.child_move), dtype=np.float32)
+            p = np.zeros(len(current_node.child_move))
             for j in range(len(current_node.child_move)):
                 move = current_node.child_move[j]
-                move_label = self.make_move_label(move, color)
-                legal_move_probabilities[j] = policy_logit[move_label]
-
-            # Boltzmann分布
-            probabilities = softmax_temperature_with_normalize(legal_move_probabilities, self.temperature)
-
+                p[j] = policy[move]
+                
             # ノードの値を更新
-            current_node.policy = probabilities
+            current_node.policy = p
             current_node.value = float(value)
 
 if __name__ == '__main__':

@@ -14,8 +14,7 @@ class Train:
         #まだ
         return
 
-    def show_Graph(self, history):
-        #まだ
+    def show_Graph(self, history):#グラフを表示
         history = history.history
         plt.plot(history['loss'], label='Train_loss')
         plt.plot(history['policy_loss'], label='Train_policy_loss')
@@ -34,7 +33,7 @@ class Train:
         """
         #でばっぐ用
         input_features = np.random.uniform(1, -1, (1000, 8, 8, 2))
-        policy_labels = np.random.uniform(1, -1, (1000, 60))
+        policy_labels = np.random.uniform(1, -1, (1000, 64))
         value_labels = np.random.uniform(1, -1, (1000,))
         """
         model = self.nn.make()#未学習モデルを用意
@@ -54,5 +53,9 @@ if __name__ == '__main__':
     data_file = './data/train_data.bin'
     model_file = './model/model_files/py-dlothello_model.h5'
     train = Train()
+    if input('reset(y/n):') in ['Y', 'y']:
+        model = train.nn.make()
+        model.save(model_file)
+        print('完了')
     train.main(data_file, model_file)
     input('終了:')
