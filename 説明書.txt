@@ -40,7 +40,7 @@ sfen文字列は、1:盤面の状態を表す長さ64の文字列 と、2: 手�
 scoretype [形式] min [最小値] max [最大値]と記述する。
 [形式]には["WP"(勝率), 'stone'(石差), 'other'(その他)]のいずれかが入る
 
-3| python-dlothelloのファイルの説明
+python-dlothelloのファイルの説明
 
 base_player.py: USI-Xプロトコル対応プレーヤーの土台
 input_features.py: 入力特徴量関連
