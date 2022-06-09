@@ -80,7 +80,7 @@ class NN:
 
 if __name__ == '__main__':
   import numpy.random as R
-  #テストを行う
+  #スマートじゃない方法でテストを行う
   nn = NN()
   test_model = nn.make()
   test_model.summary()

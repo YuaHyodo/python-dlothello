@@ -25,6 +25,9 @@ from uct.uct_node import UctNode
 from input_features import make_feature
 from tensorflow.keras.models import load_model
 
+from Endgame_AI import Endgame_AI
+
+
 import time
 import math
 
@@ -51,6 +54,11 @@ DEFAULT_BATCH_SIZE: 1回の推論で何局面を同時に評価するかを決�
 
 ==================================================
 
+DEFAULT_ENDGAME_SEARCH_ON: (簡易的な)読み切り用の探索部に切り替わる合計石数
+値を小さくするほど強いが、小さくするほど時間がかかるので自分の環境に合わせて設定する必要がある
+
+==================================================
+
 DEFAULT_C_PUCT: このパラメータの値を調整することで「利用」と「探索」のバランスを取る。
 値が大きいほど「探索」を重視する(=広く浅く読む)
 
@@ -70,6 +78,10 @@ DEFAULT_TEMPERATURE: ボルツマン分布の「温度」というパラメー�
 
 # デフォルトバッチサイズ
 DEFAULT_BATCH_SIZE = 32
+#1手当たりの基本的な使用時間(秒)
+DEF_USE_TIME = 3
+#デフォルト必勝読み開始石数
+DEFAULT_ENDGAME_SEARCH_ON = 50
 # デフォルトPUCTの定数
 DEFAULT_C_PUCT = 1.0
 # デフォルト温度パラメータ
@@ -150,6 +162,7 @@ class MCTSPlayer(BasePlayer):
 
     def __init__(self):
         super().__init__()
+        
         # モデルファイルのパス
         self.modelfile = self.DEFAULT_MODELFILE
         # モデル
@@ -170,8 +183,13 @@ class MCTSPlayer(BasePlayer):
         # 中断するプレイアウト回数
         self.halt = None
 
+        self.use_time = DEF_USE_TIME
+
         # バッチサイズ
         self.batch_size = DEFAULT_BATCH_SIZE
+
+        #読み切り探索部への切り替えスイッチ
+        self.endgame_search_on = DEFAULT_ENDGAME_SEARCH_ON
 
         # PUCTの定数
         self.c_puct = DEFAULT_C_PUCT
@@ -186,8 +204,10 @@ class MCTSPlayer(BasePlayer):
         print('id name ' + self.name)
         print('id auther ' + self.auther)
         print('option name USI_Ponder type check default false')
+        print('option name use_time type spin default ' + str(DEF_USE_TIME) + ' min 1 max 1000')
         print('option name modelfile type string default ' + self.DEFAULT_MODELFILE)
         print('option name batchsize type spin default ' + str(DEFAULT_BATCH_SIZE) + ' min 1 max 256')
+        print('option name endgame_serach_on type spin default ' + str(DEFAULT_ENDGAME_SEARCH_ON) + ' min 32 max 64')
         print('option name c_puct type spin default ' + str(int(DEFAULT_C_PUCT * 100)) + ' min 10 max 1000')
         print('option name temperature type spin default ' + str(int(DEFAULT_TEMPERATURE * 100)) + ' min 10 max 1000')
         print('option name pv_interval type spin default ' + str(DEFAULT_PV_INTERVAL) + ' min 0 max 10000')
@@ -196,8 +216,12 @@ class MCTSPlayer(BasePlayer):
     def setoption(self, args):
         if args[1] == 'modelfile':
             self.modelfile = args[3]
+        elif args[1] == 'use_time':
+            self.use_time = int(args[3])
         elif args[1] == 'batchsize':
             self.batch_size = int(args[3])
+        elif args[1] == 'endgame_search_on':
+            self.endgame_search_on = int(args[3])
         elif args[1] == 'c_puct':
             self.c_puct = int(args[3]) / 100
         elif args[1] == 'temperature':
@@ -234,6 +258,8 @@ class MCTSPlayer(BasePlayer):
         # モデルをロード・準備
         self.load_model()
 
+        self.endgame_ai = Endgame_AI()#終盤特化aiの準備
+
         # 局面初期化
         self.root_board = reversi.Board()
 
@@ -252,15 +278,15 @@ class MCTSPlayer(BasePlayer):
         #sfen => creversiのBoard
         d = {'B': reversi.BLACK_TURN, 'W': reversi.WHITE_TURN}
         line = sfen[0:65]
-        turn_of = sfen[65]
-        self.board = reversi.Board(line, d[turn_of])
+        turn_of = sfen[64]
+        self.root_board = reversi.Board(line, d[turn_of])
         return
 
-    def position(self, sfen, usi_moves): 
+    def position(self, sfen, usi_moves):
         if sfen == 'startpos':#初期局面開始
             self.root_board = reversi.Board()
         elif sfen[:5] == 'sfen ':#sfenの局面開始
-            self.set_sfen(sfen)
+            self.set_sfen(sfen[5:])
 
         moves = []
         for usi_move in usi_moves:#movesの後に続くmoveを再生
@@ -276,15 +302,20 @@ class MCTSPlayer(BasePlayer):
         """
         self.infinite_think = (infinite or ponder)
         self.STOP = False
-        self.time_limit = 5
+        self.time_limit = self.use_time
         return
 
     def go(self):
         # 探索開始時刻の記録
         self.begin_time = time.time()
 
-        if len(list(self.root_board.legal_moves)) <= 1:#パスしか合法手がない
+        if 64 in list(self.root_board.legal_moves):#パスしか合法手がない
             return 'pass', None
+
+        if self.root_board.piece_sum() >= self.endgame_search_on:#読み切る
+            print('info string mode endgame_ai')
+            move = self.endgame_ai.main(self.root_board.copy())
+            return move, None
 
         current_node = self.root_node
 
@@ -300,8 +331,11 @@ class MCTSPlayer(BasePlayer):
             self.queue_node(self.root_board, current_node)
             self.eval_node()
 
-        # 探索
-        self.search()
+        try:
+            # 探索
+            self.search()
+        except:
+            print('info string Error')
 
         # 最善手の取得とPVの表示
         bestmove, bestvalue, ponder_move = self.get_bestmove_and_print_pv()
@@ -364,6 +398,7 @@ class MCTSPlayer(BasePlayer):
 
         # 探索回数が閾値を超える、または探索が打ち切られたらループを抜ける
         while True:
+            self.init_features()
             trajectories_batch.clear()
             trajectories_batch_discarded.clear()
             self.current_batch_index = 0
@@ -470,7 +505,7 @@ class MCTSPlayer(BasePlayer):
                 # 候補手を展開する
                 child_node.expand_node(board)
                 # 候補手がない場合
-                if len(child_node.child_move) <= 1:
+                if 64 in child_node.child_move:
                     child_node.value = VALUE_LOSE
                     result = 1
                 else:
@@ -483,14 +518,13 @@ class MCTSPlayer(BasePlayer):
             if next_node.value is None:
                 return DISCARDED
 
-            # 詰みと千日手チェック
             if next_node.value == VALUE_WIN:
                 result = -1
             elif next_node.value == VALUE_LOSE:
                 result = 1
             elif next_node.value == VALUE_DRAW:
                 result = 0
-            elif len(next_node.child_move) <= 0:
+            elif 64 in next_node.child_move:
                 result = 1
             else:
                 # 手番を入れ替えて1手深く読む

@@ -19,6 +19,7 @@ class USI_X_Engine():
         while True:
             line = self.engine.stdout.readline()
             if word in line:
+                print(line)
                 break
             if 'info' in line and self.print_info:
                 print(line)
@@ -40,9 +41,9 @@ class USI_X_Engine():
         self.command('usinewgame')
         return
 
-    def go(self, sfen, moves, time_num):#メイン
+    def go(self, sfen, moves, time_num, use_sfen=False):#メイン
         """
-        sfen: sfenまたはstartposが入る
+        sfen: sfenがはいる。sfenを使わないならuse_sfenをFalseのままにして
         moves: USI-Xオセロ版のmoveで表された手順
         time_num: 制限時間(秒)
         """
@@ -50,7 +51,10 @@ class USI_X_Engine():
         for move in moves:
             m += ' '
             m += move
-        self.command('position ' + sfen + ' moves' + m)
+        if use_sfen:
+            self.command('position sfen ' + sfen + ' moves' + m)
+        else:
+            self.command('position startpos moves' + m)
         
         to_engine = 'go btime ' + str(time_num * 1000) + ' wtime ' + str(time_num * 1000)
         self.command(to_engine)
