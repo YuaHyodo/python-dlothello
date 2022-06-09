@@ -8,7 +8,7 @@ USI-Xとは
 USI-Xとはやねうらお氏(世界トップクラスの将棋AIのやねうら王の開発者)が提案した「対局ゲーム標準通信プロトコル」である。
 詳細はこのリンクを参照のこと: http://yaneuraou.yaneu.com/2022/06/07/standard-communication-protocol-for-games/
 
-
+===========================================================
 USI-Xオセロ版の詳細
 
 このプロトコルでのオセロの盤の座標は以下のようになっている
@@ -40,16 +40,38 @@ sfen文字列は、1:盤面の状態を表す長さ64の文字列 と、2: 手�
 scoretype [形式] min [最小値] max [最大値]と記述する。
 [形式]には["WP"(勝率), 'stone'(石差), 'other'(その他)]のいずれかが入る
 
+===========================================================
 python-dlothelloのファイルの説明
 
 base_player.py: USI-Xプロトコル対応プレーヤーの土台
+
 input_features.py: 入力特徴量関連
+
 mcts_player.py: pv-mctsを使ったオセロAI
+
+MCTS.bat: mcts_player.pyを呼び出しやすくするためのbatファイル
+
+Endgame_AI.py: 最終盤に特化した終局まで読むAI(mcts_playerなどが呼び出す)
+
+USI_X_Engine.py: USI-Xエンジン呼び出しツール(簡易)
+
+gen_data.py: USI-Xエンジン同士を対戦させて教師データを作る
+
 train_NN.py: ニューラルネットを訓練する
 
 ./uct/uct_node.py: mctsで使うノード関連
 
 ./model/NN.py: ニューラルネットを定義している
+
 ./model/model_files/: モデルファイルを入れておくディレクトリ
 
+./iroiro/Board_to_sfen.py: creversiのBoardをUSI-Xオセロ版のsfenに変換する
+
 ./iroiro/batファイルの型.txt: この中身をコピペしてbatファイルを作ると便利
+
+===========================================================
+python-dlothelloの今後の予定
+1:ローカルで学習を走らせる
+2:学習データ・学習済みモデルを公開する
+3:Ari shogiのMiniMax系探索部をベースにしてMiniMax系の探索部を作る
+4:リファクタリングしてコードをマシにする
