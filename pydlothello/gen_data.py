@@ -3,6 +3,7 @@ from USI_X_Engine import USI_X_Engine
 from datetime import datetime
 import creversi as reversi
 import numpy as np
+import pickle as pk
 import time
 
 """
