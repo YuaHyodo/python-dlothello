@@ -112,7 +112,7 @@ class Endgame_AI():
         self.reset(board)#リセット・準備
         max_score = self.MIN
         bestmove = None
-        Next_moves = self.ordering(self.board)#並ぶ替え済み合法手を用意
+        Next_moves = self.ordering(self.board)#並び替え済み合法手を用意
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])
             result = self.search(0) * -1#調べる・自分視点にする
@@ -126,5 +126,9 @@ class Endgame_AI():
         return reversi.move_to_str(bestmove)
 
 if __name__ == '__main__':
+    from iroiro.make_random_board import make_random_board
     ed_ai = Endgame_AI()
-    print('bestmove:', ed_ai.main(reversi.Board()))
+    board = make_random_board(56)
+    print(board)
+    print('black_turn:', board.turn)
+    print('bestmove:', ed_ai.main(board))
