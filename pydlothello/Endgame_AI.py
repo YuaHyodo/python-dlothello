@@ -18,7 +18,7 @@ class Endgame_AI():
         self.model = load_model(self.model_file)#ニューラルネット
         self.make_input_feature = make_feature#入力特徴量を作る関数
         self.ordering_depth = 4#スタートしてからこのDepthまでしかmove orderingはしない
-        self.orded_moves_table = {}#すでに並べ替え済み
+        self.ordering_moves_table = {}#すでに並べ替え済み
 
         self.MAX = 10000#最大を表す(+無限の代わり)
         self.MIN = self.MAX * -1#最小を表す(-無限の代わり)
@@ -53,8 +53,8 @@ class Endgame_AI():
 
     def ordering(self, board):#ポリシー出力を使って手を並び変える
         K = board.to_line()#Key
-        if K in self.orded_moves_table.keys():#すでに登録されているか？
-            return self.orded_moves_table[K]#されているなら登録されている値を返す
+        if K in self.ordering_moves_table.keys():#すでに登録されているか？
+            return self.ordering_moves_table[K]#されているなら登録されている値を返す
         F = [self.make_input_feature(board)]#入力特徴量を用意
         policy = self.model.predict(np.array(F), batch_size=len(F))[0][0]#推論
         Next_moves = list(board.legal_moves)#合法手のリストを用意
@@ -63,11 +63,11 @@ class Endgame_AI():
         for i in range(len(Next_moves)):
             output[Next_moves[i]] = policy[Next_moves[i]]
         output = sorted(output.items(), reverse=True, key=lambda x: x[1])
-        orded_moves = []
+        ordering_moves = []
         for i in range(len(output)):
-            orded_moves.append(output[i][0])
-        self.orded_moves_table[K] = orded_moves#次回のために登録する
-        return orded_moves
+            ordering_moves.append(output[i][0])
+        self.ordering_moves_table[K] = ordering_moves#次回のために登録する
+        return ordering_moves
 
     def is_double_pass(self):
         """
@@ -128,7 +128,7 @@ class Endgame_AI():
 if __name__ == '__main__':
     from iroiro.make_random_board import make_random_board
     ed_ai = Endgame_AI()
-    board = make_random_board(56)
+    board = make_random_board(48)
     print(board)
     print('black_turn:', board.turn)
     print('bestmove:', ed_ai.main(board))
