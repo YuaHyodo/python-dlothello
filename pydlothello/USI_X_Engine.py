@@ -56,7 +56,7 @@ class USI_X_Engine():
         else:
             self.command('position startpos moves' + m)
         
-        to_engine = 'go btime ' + str(time_num * 1000) + ' wtime ' + str(time_num * 1000)
+        to_engine = 'go btime 1000 wtime 1000 byoyomi ' + str(time_num * 1000)
         self.command(to_engine)
         from_engine = self.read('bestmove')
         if 'resign' in from_engine:
