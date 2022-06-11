@@ -16,12 +16,15 @@ import time
 
 class gen_data():
     def __init__(self):
-        self.dataset_num = 10#生成するデータセットの数
+        self.dataset_num = 100#生成するデータセットの数
         self.data_num = 50#1データセット当たりのデータ数(単位は局)
         self.start_random_move_num = 8#初手からこの手数までは絶対にランダムに行動
-        self.think_time = 5#1手当たりの思考時間
+        self.think_time = 1#1手当たりの思考時間
         self.random_move = 5#ランダムムーブの割合を決める
+        #self.set_engine()
+        self.set_engine2()
 
+    def set_engine(self):
         self.e1 = USI_X_Engine()
         self.e2 = USI_X_Engine()
         self.e1.print_info = True
@@ -36,6 +39,21 @@ class gen_data():
                  'setoption name temperature value 1000',
                            'setoption name endgame_search_on value 54',
                            'setoption name use_time value 3']
+        self.file_name = 'self_play'
+        self.cool_time = 60
+
+    def set_engine2(self):
+        print('Random_Playerをセット')
+        self.e1 = USI_X_Engine()
+        self.e2 = USI_X_Engine()
+        self.e1.print_info = True
+        self.e2.print_info = True
+        self.e1.Engine_path = 'random_kun.bat'
+        self.e2.Engine_path = 'random_kun.bat'
+        self.e1.options = []
+        self.e2.options = []
+        self.file_name = 'random'
+        self.cool_time = 0
 
     def reset(self):#ボードとかをリセット
         self.board = reversi.Board()
@@ -46,7 +64,7 @@ class gen_data():
     def save(self, data):#データをセーブ
         print('セーブ中・・・')
         now = datetime.now()
-        path = './data/{:04}{:02}{:02}{:02}{:02}{:02}.bin'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
+        path = './data/' + self.file_name + '{:04}{:02}{:02}{:02}{:02}{:02}.bin'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
         with open(path, 'wb') as f:
             pk.dump(data, f)
         print('セーブ完了')
@@ -130,10 +148,10 @@ class gen_data():
                 print(self.dataset_num, 'データセット中 |', sets, 'セット目')
                 print(self.data_num, '局中 |', i, '局目')
                 data.extend(self.play())
-                if summer_mode:#夏用のコード
-                    print('夏用モード')
+                if summer_mode:#夏のためのコード
+                    print('夏モード')
                     print('PCが冷えるのを待機中・・・')
-                    time.sleep(60)
+                    time.sleep(self.cool_time)
                     print('終わり')
                 print('#####################################')
                 print('')
@@ -151,4 +169,8 @@ if __name__ == '__main__':
     逆に、PCが燃えそうな人はtime.sleep()のカッコ内の数字を増やそう。
     """
     gen = gen_data()
+    if input('self_play(y/n):') in ['n', 'N', 'no', 'No']:
+        gen.set_engine2()
+    else:
+        gen.set_engine()
     gen.main(summer_mode=True)

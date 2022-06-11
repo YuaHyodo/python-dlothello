@@ -81,7 +81,7 @@ DEFAULT_BATCH_SIZE = 32
 #1手当たりの基本的な使用時間(秒)
 DEF_USE_TIME = 3
 #デフォルト必勝読み開始石数
-DEFAULT_ENDGAME_SEARCH_ON = 50
+DEFAULT_ENDGAME_SEARCH_ON = 48
 # デフォルトPUCTの定数
 DEFAULT_C_PUCT = 1.0
 # デフォルト温度パラメータ
@@ -303,6 +303,14 @@ class MCTSPlayer(BasePlayer):
         self.infinite_think = (infinite or ponder)
         self.STOP = False
         self.time_limit = self.use_time
+        if self.root_board.turn:#黒番
+            if binc != None:
+                self.time_limit += (binc - 0.5)
+        else:
+            if winc != None:
+                self.time_limit += (winc - 0.5)
+        if byoyomi != None:
+            self.time_limit += byoyomi
         return
 
     def go(self):

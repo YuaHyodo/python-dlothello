@@ -1,8 +1,12 @@
 from tensorflow.keras.callbacks import LambdaCallback, EarlyStopping
+from tensorflow.keras.models import load_model
 from tensorflow.keras import backend as K
+from input_features import make_feature_for_train as make_feature
 import matplotlib.pyplot as plt
+import creversi as reversi
 from model.NN import NN
 import numpy as np
+import pickle as pk
 
 class Train:
     def __init__(self):
@@ -11,8 +15,36 @@ class Train:
         self.nn = NN()
 
     def load_data(self, path):
-        #まだ
-        return
+        """
+        データを読む
+        """
+        d = {'B': reversi.BLACK_TURN, 'W': reversi.WHITE_TURN}
+        d2 = {'B': 1, 'W': -1, 'D': 0}
+        with open(path, 'rb') as f:
+            data = pk.load(f)
+        features = None
+        label_policy = []
+        label_value = []
+        for i in range(len(data)):
+            if i % 1000 == 0:
+                print(len(data), 'データ中', i, '番目まで処理')
+            sfen = data[i]['sfen']
+            line = sfen[0:65]
+            turn_of = sfen[64]
+            board = reversi.Board(line, d[turn_of])
+            bestmove = data[i]['bestmove']
+            winner = data[i]['winner']
+            policy = np.zeros(64)
+            policy[reversi.move_from_str(bestmove)] = d2[turn_of] * d2[winner]#負けた時にとった行動は-1、勝った時は1
+            fea = make_feature(board)
+            if type(features) == type(None):
+                features = fea
+            else:
+                features = np.concatenate((features, fea))
+            for i in range(4):
+                label_policy.append(policy)
+                label_value.append(d2[turn_of] * d2[winner])
+        return features, np.array(label_policy), np.array(label_value)
 
     def show_Graph(self, history):#グラフを表示
         history = history.history
@@ -26,17 +58,18 @@ class Train:
         return
 
     def main(self, data_path, model_file):
-        data_set = load_data(data_path)#データを読み込む
-        input_features = data_set['data']#入力
-        policy_labels = data_set['policy']#ポリシー教師データ
-        value_labels = data_set['value']#バリュー教師データ
+        F, P, V = self.load_data(data_path)#データを読み込む
+        print('data_shape:', F.shape, P.shape, V.shape)
+        input_features = F#入力
+        policy_labels = P#ポリシー教師データ
+        value_labels = V#バリュー教師データ
         """
         #でばっぐ用
         input_features = np.random.uniform(1, -1, (1000, 8, 8, 2))
         policy_labels = np.random.uniform(1, -1, (1000, 64))
         value_labels = np.random.uniform(1, -1, (1000,))
         """
-        model = self.nn.make()#未学習モデルを用意
+        model = load_model(model_file)
         model.compile(loss=['categorical_crossentropy', 'mse'], optimizer='adam')#コンパイル
 
         print('学習開始')
@@ -49,8 +82,7 @@ class Train:
         return
 
 if __name__ == '__main__':
-    #まだ
-    data_file = './data/train_data.bin'
+    data_file = './data/random_data/R4.bin'
     model_file = './model/model_files/py-dlothello_model.h5'
     train = Train()
     if input('reset(y/n):') in ['Y', 'y']:
