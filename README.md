@@ -11,6 +11,6 @@ USI-Xについてはこちらを参照のこと: http://yaneuraou.yaneu.com/2022
 ランダムに手を選ぶUSI-Xエンジン。<br>
 デバッグとかに使える。<br>
 # Azisai詳細
-「マスの重みの評価 + シンプルαβ探索」という構成の指標として使えるUSI-X対応エンジン。 <br>
+「マスの重みの評価 + シンプルαβ探索」という構成の指標として使えるUSI-Xエンジン。 <br>
 python-dlothelloの学習の進捗を測るために用意した。<br>
 マスの重みはリンク先のものを利用させて頂いた: https://uguisu.skr.jp/othello/5-1.html <br>
