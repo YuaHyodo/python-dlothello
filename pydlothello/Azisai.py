@@ -19,17 +19,17 @@ square_weights = np.array([[30, -12, 0, -1, -1, 0, -12, 30],
                                        [-1, -3,-1, -1, -1, -1, -3, -1],
                                        [0, -3, 0, -1, -1, 0, -3, 0],
                                        [-12, -15, -3, -3, -3, -3, -15, -12],
-                                       [30, -12, 0, -1, -1, 0, -12, 30]])
+                                       [30, -12, 0, -1, -1, 0, -12, 30]])#マスの重み
 
 class Azisai(BasePlayer):
     name = 'Azisai_v1'
     auther = 'Y_Hyodo'
-    def __init__(self):
+    def __init__(self):#初期化
         super().__init__()
-        self.MAX = 10000
-        self.MIN = self.MAX * -1
-        self.DRAW_V = 0
-        self.max_depth = DEF_MAX_DEPTH
+        self.MAX = 10000# +無限の代わり
+        self.MIN = self.MAX * -1# -無限の代わり
+        self.DRAW_V = 0#引き分けの値
+        self.max_depth = DEF_MAX_DEPTH#探索深さ制限
 
     def usi(self):
         print('id name ' + self.name)
@@ -63,7 +63,7 @@ class Azisai(BasePlayer):
     def go(self):
         # 探索開始時刻の記録
         self.begin_time = time.time()
-
+        
         if 64 in list(self.root_board.legal_moves):#パスしか合法手がない
             return 'pass', None
 
@@ -84,9 +84,10 @@ class Azisai(BasePlayer):
         self.moves.pop(-1)#戻す
         return
 
-    def eval(self, board):
+    def eval(self, board):#評価
         planes = np.empty((2, 8, 8), dtype=np.float32)
-        board.piece_planes(planes)
+        board.piece_planes(planes)#石があるところは1,それ以外は0の配列がそれぞれの手番分得られる
+        #以下、計算
         my = planes[0] * square_weights
         opponent = (planes[1] * square_weights) * -1
         my = sum(my.reshape((64,)))
@@ -96,7 +97,7 @@ class Azisai(BasePlayer):
     def change(self, AB):
         return [-AB[1], -AB[0]]
 
-    def return_winner(self):
+    def return_winner(self):#手番側から見た数値が返ってくる
         my = self.board.piece_num()
         opponent = self.board.opponent_piece_num()
         if my == opponent:
@@ -107,7 +108,7 @@ class Azisai(BasePlayer):
             v = self.MIN
         return v
 
-    def ordering(self):
+    def ordering(self):#move ordering(手の並べ替え)
         legal_moves = list(self.board.legal_moves)
         output = {}
         for i in range(len(legal_moves)):
@@ -121,39 +122,40 @@ class Azisai(BasePlayer):
         return ordering_moves
 
     def Search(self, depth, alpha_beta):
-        if self.board.is_game_over():
+        if self.board.is_game_over():#終局
             return self.return_winner()
-        if (depth >= self.max_depth) or (64 in list(self.board.legal_moves)):
+        if (depth >= self.max_depth) or (64 in list(self.board.legal_moves)):#評価
             return self.eval(self.board)
-        max_score = self.MIN
-        Next_moves = self.ordering()
+        max_score = self.MIN#最大スコアをリセット
+        Next_moves = self.ordering()#並べ替え済み合法手を取得
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])
-            result = self.Search(depth + 1, self.change(alpha_beta)) * -1
-            if result >= alpha_beta[1]:
+            result = self.Search(depth + 1, self.change(alpha_beta)) * -1#自分目線の値
+            if result >= alpha_beta[1]:#打ち切り
                 self.pop()
                 return result
-            alpha_beta[0] = max([alpha_beta[0], result])
-            max_score = max([max_score, result])
+            alpha_beta[0] = max([alpha_beta[0], result])#値を更新
+            max_score = max([max_score, result])#値を更新
             self.pop()
-        return max_score
+        return max_score#最高スコアを返す
 
     def Search_main(self):
+        #各種リセット
         self.board = self.root_board.copy()
         self.board_history = [self.board.copy()]
         self.moves = []
-        #以下、メイン
         alpha_beta = [self.MIN, self.MAX]
-        Next_moves = self.ordering()
+        #以下、メイン
+        Next_moves = self.ordering()#並べ替え済み合法手を取得
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])
-            result = self.Search(1, self.change(alpha_beta)) * -1
-            if result >= alpha_beta[0]:
-                alpha_beta[0] = result
-                bestmove = Next_moves[i]
-            print('info score ' + str(alpha_beta[0]) + ' pv ' + reversi.move_to_str(bestmove))
+            result = self.Search(1, self.change(alpha_beta)) * -1#自分目線にする
+            if result >= alpha_beta[0]:#今までで最高の結果
+                alpha_beta[0] = result#最高の結果を更新
+                bestmove = Next_moves[i]#最前手を更新
+            print('info score ' + str(alpha_beta[0]) + ' pv ' + reversi.move_to_str(bestmove))#現在の最善手等を表示
             self.pop()
-        return bestmove
+        return bestmove#最善手を返す
 
 if __name__ == '__main__':
     azisai = Azisai()
