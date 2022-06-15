@@ -300,17 +300,32 @@ class MCTSPlayer(BasePlayer):
         """
         とりあえず仮のやつ
         """
+        if btime != None:
+            btime /= 1000
+        if wtime != None:
+            wtime /= 1000
+        if byoyomi != None:
+            byoyomi /= 1000
+        if binc != None:
+            binc /= 1000
+        if winc != None:
+            winc /= 1000
         self.infinite_think = (infinite or ponder)
         self.STOP = False
         self.time_limit = self.use_time
         if self.root_board.turn:#黒番
+            if btime < self.time_limit:
+                self.time_limit = int(btime / 2)
             if binc != None:
                 self.time_limit += (binc - 0.5)
         else:
+            if wtime < self.time_limit:
+                self.time_limit = int(wtime / 2)
             if winc != None:
                 self.time_limit += (winc - 0.5)
         if byoyomi != None:
-            self.time_limit += byoyomi
+            self.time_limit += (byoyomi - 0.5)
+        print('info string time_limit ' + str(self.time_limit))
         return
 
     def go(self):

@@ -99,4 +99,4 @@ if __name__ == '__main__':
     engine2 = input('エンジン2のpath:')
     invoker = engine_invoker()
     invoker.set_engine([engine1, engine2])
-    invoker.main(int(input('連戦回数')))
+    invoker.main(int(input('連戦回数: ')))

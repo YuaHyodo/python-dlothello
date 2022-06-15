@@ -16,7 +16,7 @@ import time
 
 class gen_data():
     def __init__(self):
-        self.dataset_num = 100#生成するデータセットの数
+        self.dataset_num = 1000#生成するデータセットの数
         self.data_num = 50#1データセット当たりのデータ数(単位は局)
         self.start_random_move_num = 8#初手からこの手数までは絶対にランダムに行動
         self.think_time = 1#1手当たりの思考時間
@@ -40,19 +40,19 @@ class gen_data():
                            'setoption name endgame_search_on value 54',
                            'setoption name use_time value 3']
         self.file_name = 'self_play'
-        self.cool_time = 60
+        self.cool_time = 60#単位は秒
 
     def set_engine2(self):
-        print('Random_Playerをセット')
+        print('Playerをセット')
         self.e1 = USI_X_Engine()
         self.e2 = USI_X_Engine()
         self.e1.print_info = True
         self.e2.print_info = True
-        self.e1.Engine_path = 'random_kun.bat'
-        self.e2.Engine_path = 'random_kun.bat'
+        self.e1.Engine_path = 'Azisai.bat'
+        self.e2.Engine_path = 'Azisai.bat'
         self.e1.options = []
         self.e2.options = []
-        self.file_name = 'random'
+        self.file_name = 'Azisai'
         self.cool_time = 0
 
     def reset(self):#ボードとかをリセット

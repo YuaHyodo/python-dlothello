@@ -7,12 +7,14 @@ import creversi as reversi
 from model.NN import NN
 import numpy as np
 import pickle as pk
+import time
 
 class Train:
     def __init__(self):
         self.epochs = 10#エポック数
-        self.batch_size = 256#学習率
+        self.batch_size = 512#バッチサイズ
         self.nn = NN()
+        self.summer_mode_callback = LambdaCallback(on_epoch_end=lambda epoch,logs: time.sleep(60))#PCが冷えるのを待機
 
     def load_data(self, path):
         """
@@ -74,7 +76,7 @@ class Train:
 
         print('学習開始')
         history = model.fit(input_features, [policy_labels, value_labels], batch_size=self.batch_size,
-                            epochs=self.epochs)#学習
+                            epochs=self.epochs, callbacks=[self.summer_mode_callback])#学習
         model.save(model_file)#せーぶ
         K.clear_session()
         print('学習完了')
@@ -82,7 +84,7 @@ class Train:
         return
 
 if __name__ == '__main__':
-    data_file = './data/random_data/R4.bin'
+    data_file = input('教師データのファイル:')
     model_file = './model/model_files/py-dlothello_model.h5'
     train = Train()
     if input('reset(y/n):') in ['Y', 'y']:
