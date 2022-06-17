@@ -205,7 +205,7 @@ class MiniMaxPlayer(BasePlayer):
         self.board = reversi.Board(self.board_history[-1]['line'], self.board_history[-1]['turn_of'])#盤を戻す
         return
 
-    def is_stop(self):
+    def is_stop(self):#探索を打ち切るか？
         spend_time = time.time() - self.begin_time
         if (spend_time * 2) >= self.time_limit:
             return True
@@ -223,7 +223,7 @@ class MiniMaxPlayer(BasePlayer):
             return self.MIN
         return
 
-    def change(self, AB):
+    def change(self, AB):#AlphaBetaの値をひっくり返す
         return [-AB[1], -AB[0]]
 
     def ordering(self, board):#ポリシー出力を使って手を並び変える
@@ -242,6 +242,14 @@ class MiniMaxPlayer(BasePlayer):
         return ordering_moves
 
     def eval(self, board):
+        """
+        ここが肝要
+        兵頭作のAI Ari shogi ver1のMiniMax系探索部に搭載されている技術。
+        合法手の数が多いほどGPUをうまく使える
+        (ので、オセロではあまり効果がない)
+        末端での評価の部分を書き換えるだけで実装できるのが良いポイントだと個人的に思う
+        (実装が楽なのはいいことだと思う)
+        """
         Next_moves = list(self.board.legal_moves)
         features = []
         for i in range(len(Next_moves)):
