@@ -11,7 +11,7 @@ import time
 
 class Train:
     def __init__(self):
-        self.epochs = 10#エポック数
+        self.epochs = 2#エポック数
         self.batch_size = 512#バッチサイズ
         self.nn = NN()
         self.summer_mode_callback = LambdaCallback(on_epoch_end=lambda epoch,logs: time.sleep(60))#PCが冷えるのを待機
@@ -88,8 +88,9 @@ if __name__ == '__main__':
     model_file = './model/model_files/py-dlothello_model.h5'
     train = Train()
     if input('reset(y/n):') in ['Y', 'y']:
-        model = train.nn.make()
-        model.save(model_file)
+        if input('確認 | 「aiueo」と入力してください:') == 'aiueo':
+            model = train.nn.make()
+            model.save(model_file)
         print('完了')
     train.main(data_file, model_file)
     input('終了:')
