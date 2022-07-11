@@ -50,9 +50,9 @@ class gen_data():
         self.e2.print_info = True
         self.e1.Engine_path = 'Azisai.bat'
         self.e2.Engine_path = 'Azisai.bat'
-        self.e1.options = []
-        self.e2.options = []
-        self.file_name = 'Azisai'
+        self.e1.options = ['setoption name max_depth value 8']
+        self.e2.options = ['setoption name max_depth value 8']
+        self.file_name = 'Azisai_depth8_'
         self.cool_time = 0
 
     def reset(self):#ボードとかをリセット

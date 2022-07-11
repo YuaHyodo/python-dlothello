@@ -30,12 +30,19 @@ class Azisai(BasePlayer):
         self.MIN = self.MAX * -1# -無限の代わり
         self.DRAW_V = 0#引き分けの値
         self.max_depth = DEF_MAX_DEPTH#探索深さ制限
+        self.NoSearch_table = {}
+        self.ordering_moves_table = {}
 
     def usi(self):
         print('id name ' + self.name)
         print('id auther ' + self.auther)
         print('option name max_depth type spin default ' + str(DEF_MAX_DEPTH) + ' min 1 max 8')
 
+    def usinewgame(self):
+        self.NoSearch_table.clear()
+        self.ordering_moves_table.clear()
+        return
+    
     def setoption(self, args):
         if args[1] == 'max_depth':
             self.max_depth = int(args[3])
@@ -84,7 +91,19 @@ class Azisai(BasePlayer):
         self.moves.pop(-1)#戻す
         return
 
+    def make_key(self, board):
+        line = board.to_line()
+        if board.turn:#黒番
+            color = 'B'
+        else:
+            color = 'W'
+        key = line + color
+        return key
+
     def eval(self, board):#評価
+        k =  self.make_key(board)
+        if k in self.NoSearch_table.keys():
+            return self.NoSearch_table[k]
         planes = np.empty((2, 8, 8), dtype=np.float32)
         board.piece_planes(planes)#石があるところは1,それ以外は0の配列がそれぞれの手番分得られる
         #以下、計算
@@ -92,7 +111,9 @@ class Azisai(BasePlayer):
         opponent = (planes[1] * square_weights) * -1
         my = sum(my.reshape((64,)))
         opponent = sum(opponent.reshape((64,)))
-        return my + opponent
+        value = my + opponent
+        self.NoSearch_table[k] = value
+        return value
 
     def change(self, AB):
         return [-AB[1], -AB[0]]
@@ -109,6 +130,9 @@ class Azisai(BasePlayer):
         return v
 
     def ordering(self):#move ordering(手の並べ替え)
+        key = self.make_key(self.board)
+        if key in self.ordering_moves_table.keys():
+            return self.ordering_moves_table[key]
         legal_moves = list(self.board.legal_moves)
         output = {}
         for i in range(len(legal_moves)):
@@ -119,6 +143,7 @@ class Azisai(BasePlayer):
         ordering_moves = []
         for i in range(len(output)):
             ordering_moves.append(output[i][0])
+        self.ordering_moves_table[key] = ordering_moves
         return ordering_moves
 
     def Search(self, depth, alpha_beta):
