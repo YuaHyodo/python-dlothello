@@ -30,6 +30,7 @@ class Azisai(BasePlayer):
         self.MIN = self.MAX * -1# -無限の代わり
         self.DRAW_V = 0#引き分けの値
         self.max_depth = DEF_MAX_DEPTH#探索深さ制限
+        self.ordering_depth = int(self.max_depth / 2)
         self.NoSearch_table = {}
         self.ordering_moves_table = {}
 
@@ -152,7 +153,10 @@ class Azisai(BasePlayer):
         if (depth >= self.max_depth) or (64 in list(self.board.legal_moves)):#評価
             return self.eval(self.board)
         max_score = self.MIN#最大スコアをリセット
-        Next_moves = self.ordering()#並べ替え済み合法手を取得
+        if depth <= self.ordering_depth:
+            Next_moves = self.ordering()#並べ替え済み合法手を取得
+        else:
+            Next_moves = list(self.board.legal_moves)
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])
             result = self.Search(depth + 1, self.change(alpha_beta)) * -1#自分目線の値
