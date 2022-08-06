@@ -34,12 +34,13 @@ class gen_data():
         self.e1.options = ['setoption name USI_Ponder value false',
                  'setoption name temperature value 1000',
                            'setoption name endgame_search_on value 54',
-                           'setoption name use_time value 3']
+                           'setoption name use_time value 10']
         self.e2.options = ['setoption name USI_Ponder value false',
                  'setoption name temperature value 1000',
                            'setoption name endgame_search_on value 54',
-                           'setoption name use_time value 3']
+                           'setoption name use_time value 10']
         self.file_name = 'self_play'
+        self.think_time = 5
         self.cool_time = 60#単位は秒
 
     def set_engine2(self):

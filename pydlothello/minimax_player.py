@@ -174,6 +174,7 @@ class MiniMaxPlayer(BasePlayer):
             move = self.endgame_ai.main(self.root_board.copy())
             return move, None
 
+        self.stop_OK = False
         bestmove = self.search_main()
 
         return reversi.move_to_str(bestmove), None
@@ -208,8 +209,10 @@ class MiniMaxPlayer(BasePlayer):
         return
 
     def is_stop(self):#探索を打ち切るか？
+        if not self.stop_OK:
+            return False
         spend_time = time.time() - self.begin_time
-        if (spend_time * 2) >= self.time_limit:
+        if (spend_time + 1) >= self.time_limit:
             return True
         return False
 
@@ -260,38 +263,13 @@ class MiniMaxPlayer(BasePlayer):
             features.append(make_feature(b))
         pv = self.model.predict(np.array(features))
         values = pv[1]
-        return min(values[0])#相手から見た値
-
-    def NWS(self, depth, window):
-        if self.board.is_game_over():#終局
-            return self.return_winner()
-        if 64 in list(self.board.legal_moves):#パス
-            return self.return_winner()#仮の処理
-        if depth >= self.max_depth:#評価
-            return self.eval(self.board)
-        if depth <= int(self.max_depth / 2):
-            Next_moves = self.ordering(self.board)
-        else:
-            Next_moves = list(self.board.legal_moves)
-        max_score = self.MIN
-        for i in range(len(Next_moves)):
-            self.push(Next_moves[i])#打つ
-            result = self.NWS(depth + 1, self.change(window)) * -1#さらに深く読む
-            if result == self.MAX:#勝った
-                self.pop()
-                return self.MAX#それ以上望ましい結果はないので打ち切る
-            if result >= window[1]:#打ち切り
-                self.pop()
-                return result
-            if result >= window[0]:
-                window = [result, result + self.window_size]
-            max_score = max([result, max_score])#最高値を更新
-            self.pop()#戻す
-        return max_score
+        return max(values[0]) * -1
 
     def search(self, depth, AlphaBeta):
         if self.board.is_game_over():#終局
             return self.return_winner()
+        if self.is_stop():
+            return 'stop'
         if 64 in list(self.board.legal_moves):#パス
             return self.return_winner()#仮の処理
         if depth >= self.max_depth:#評価
@@ -303,7 +281,10 @@ class MiniMaxPlayer(BasePlayer):
         max_score = self.MIN#これまでの最大値
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])#打つ
-            result = self.search(depth + 1, self.change(AlphaBeta)) * -1#さらに深く読む
+            result = self.search(depth + 1, self.change(AlphaBeta))#さらに深く読む
+            if self.is_stop():
+                return 'stop'
+            result *= -1
             if result == self.MAX:#勝った
                 self.pop()
                 return self.MAX#それ以上望ましい結果はないので打ち切る
@@ -320,13 +301,20 @@ class MiniMaxPlayer(BasePlayer):
         Next_moves = self.ordering(self.board)
         self.max_depth = 2
         WIN = False
+        bestmove = None
+        bestscore = None
         while True:
             AlphaBeta = [self.MIN, self.MAX]
             self.board = self.root_board.copy()
+            bestmove_kari = None
+            bestscore_kari = self.MIN
             O = {}
             for i in range(len(Next_moves)):
                 self.push(Next_moves[i])
-                result = self.search(1, self.change(AlphaBeta)) * -1
+                result = self.search(1, self.change(AlphaBeta))
+                if self.is_stop():
+                    break
+                result *= -1
                 if result == self.MAX:
                     print('info string I win.')
                     self.pop()
@@ -335,52 +323,23 @@ class MiniMaxPlayer(BasePlayer):
                     break
                 if result >= AlphaBeta[0]:
                     AlphaBeta[0] = result
-                    bestmove = Next_moves[i]
+                    bestmove_kari = Next_moves[i]
+                    bestscore_kari = result
                 O[Next_moves[i]] = result
                 self.pop()
+                if WIN:
+                    bestmove = bestmove_kari
+                    bestscore = bestscore_kari
+                    break
             if self.is_stop() or WIN:
                 break
-            print('info depth ' +  str(self.max_depth) + ' score ' + str(AlphaBeta[0]) + ' pv ' + reversi.move_to_str(bestmove))
+            bestmove = bestmove_kari
+            bestscore = bestscore_kari
+            print('info depth ' +  str(self.max_depth) + ' score ' + str(bestscore) + ' pv ' + reversi.move_to_str(bestmove))
             Next_moves = sort_dict(O)
+            self.stop_OK = True
             self.max_depth += 1
         return bestmove
-
-    def search_main2(self):
-        self.board = self.root_board.copy()
-        Next_moves = self.ordering(self.board)
-        self.max_depth = 2
-        bestmove = None
-        bestscore = None
-        while True:
-            AlphaBeta = [self.MIN, self.MAX]
-            self.board = self.root_board.copy()
-            O = {}
-            for i in range(len(Next_moves)):
-                self.push(Next_moves[i])
-                if i == 0:
-                    result = self.search(1, self.change(AlphaBeta))
-                    result *= -1
-                    window = [result, result + self.window_size]
-                    AlphaBeta[0] = result
-                else:
-                    result = self.NWS(1, self.change(window))
-                    result *= -1
-                    if result >= window[0]:
-                        result = self.search(1, self.change(AlphaBeta))
-                        result *= -1
-                        window = [result, result + self.window_size]
-                        AlphaBeta[0] = max([AlphaBeta[0], result])
-                    else:
-                        result = -1
-                O[N_moves[i]] = result
-                self.pop()
-                if self.is_stop() and bestmove != None:
-                    return bestmove
-            Next_moves = sort_dict(O)
-            bestmove = Next_moves[0]
-            bestscore = AlphaBeta[0]
-            self.max_depth += 1
-        return
 
 if __name__ == '__main__':
     player = MiniMaxPlayer()
