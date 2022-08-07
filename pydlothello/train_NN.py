@@ -26,7 +26,7 @@ class Train:
         """
         d = {'B': reversi.BLACK_TURN, 'W': reversi.WHITE_TURN}
         d2 = {'B': 1, 'W': -1, 'D': 0}
-        data = []
+        data_kari = []
         files = list(Path(path).glob('*.bin'))
         def A(x):
             if x > 0.5:
@@ -36,18 +36,20 @@ class Train:
             return 0.5
         for i in files:
             with i.open(mode='rb') as f:
-                data.extend(pk.load(f))
-        np.random.shuffle(data)
-        features = None
+                data_kari.extend(pk.load(f))
+        np.random.shuffle(data_kari)
+        data = []
+        for i in range(len(data_kari)):
+            if data_kari[i]['bestmove'] == 'pass':
+                continue
+            data.append(data_kari[i])
+        features = np.empty((len(data), 2, 8, 8), dtype=np.float32)
         label_policy = []
         label_value = []
-        feature_dict = {}
         board = reversi.Board()
         for i in range(len(data)):
             if i % 10000 == 0:
                 print(len(data), 'データ中', i, '番目まで処理 | 現在の時間:', datetime.now())
-            if data[i]['bestmove'] == 'pass':
-                continue
             sfen = data[i]['sfen']
             line = sfen[0:65]
             turn_of = sfen[64]
@@ -56,18 +58,10 @@ class Train:
             winner = data[i]['winner']
             policy = np.zeros(64)
             policy[reversi.move_from_str(bestmove)] = A(d2[turn_of] * d2[winner])#負けた時にとった行動は-1、勝った時は1
-            fea = make_feature(board)
-            if type(features) == type(None):
-                features = fea
-            else:
-                features = np.concatenate((features, fea))
-            """
-            for i in range(4):
-                label_policy.append(policy)
-                label_value.append(d2[turn_of] * d2[winner])
-            """
-        data.clear()
-        feature_dict.clear()
+            board.piece_planes(features[i])
+            label_policy.append(policy)
+            label_value.append(d2[turn_of] * d2[winner])
+        features = features.transpose((0, 2, 3, 1))
         return features, np.array(label_policy), np.array(label_value)
 
     def show_Graph(self, history):#グラフを表示
@@ -100,16 +94,21 @@ class Train:
         dataset = tf.data.Dataset.from_tensor_slices((F, P, V)).batch(self.batch_size)
         for f, p, v in dataset:
             model.fit(f, [p, v], batch_size=self.batch_size,
-                            epochs=self.epochs, callbacks=[self.summer_mode_callback])#学習
+                             epochs=self.epochs, callbacks=[self.summer_mode_callback])#学習
         model.save(model_file)#せーぶ
         K.clear_session()
         print('学習完了')
         return
 
 if __name__ == '__main__':
+    if input('リセット( y / n ):') == 'y':
+        file = input('リセットするファイル(拡張子なし):') + '.h5'
+        model = NN().make()
+        model.save(file)
+        print('完了')
     data_file = input('教師データのディレクトリ:')
     def_model_file = './model/model_files/py-dlothello_model.h5'
-    model_file = input('モデルファイル:')
+    model_file = input('モデルファイル(拡張子なし):') + '.h5'
     if len(model_file) <= 3:
         model_file = def_model_file
     train = Train()
