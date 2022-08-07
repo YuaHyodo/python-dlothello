@@ -1,7 +1,8 @@
 from tensorflow.keras.callbacks import LambdaCallback, EarlyStopping
 from tensorflow.keras.models import load_model
 from tensorflow.keras import backend as K
-from input_features import make_feature_for_train as make_feature
+#from input_features import make_feature_for_train as make_feature
+from input_features import make_feature
 from datetime import datetime
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ class Train:
         label_policy = []
         label_value = []
         feature_dict = {}
+        board = reversi.Board()
         for i in range(len(data)):
             if i % 10000 == 0:
                 print(len(data), 'データ中', i, '番目まで処理 | 現在の時間:', datetime.now())
@@ -49,23 +51,21 @@ class Train:
             sfen = data[i]['sfen']
             line = sfen[0:65]
             turn_of = sfen[64]
-            board = reversi.Board(line, d[turn_of])
+            board.set_line(line, d[turn_of])
             bestmove = data[i]['bestmove']
             winner = data[i]['winner']
             policy = np.zeros(64)
             policy[reversi.move_from_str(bestmove)] = A(d2[turn_of] * d2[winner])#負けた時にとった行動は-1、勝った時は1
-            if sfen not in feature_dict.keys():
-                fea = make_feature(board)
-                feature_dict[sfen] = fea
-            else:
-                fea = feature_dict[sfen]
+            fea = make_feature(board)
             if type(features) == type(None):
                 features = fea
             else:
                 features = np.concatenate((features, fea))
+            """
             for i in range(4):
                 label_policy.append(policy)
                 label_value.append(d2[turn_of] * d2[winner])
+            """
         data.clear()
         feature_dict.clear()
         return features, np.array(label_policy), np.array(label_value)
@@ -113,10 +113,5 @@ if __name__ == '__main__':
     if len(model_file) <= 3:
         model_file = def_model_file
     train = Train()
-    if input('reset(y/n):') in ['Y', 'y']:
-        if input('確認 | 「aiueo」と入力してください:') == 'aiueo':
-            model = train.nn.make()
-            model.save(model_file)
-        print('完了')
     train.main(data_file, model_file)
     input('終了:')

@@ -1,4 +1,5 @@
 from tensorflow.keras.models import load_model
+from iroiro.Board_to_sfen import board_to_sfen
 from input_features import make_feature
 import creversi as reversi
 import numpy as np
@@ -19,6 +20,7 @@ class Endgame_AI():
         self.make_input_feature = make_feature#入力特徴量を作る関数
         self.ordering_depth = 4#スタートしてからこのDepthまでしかmove orderingはしない
         self.ordering_moves_table = {}#すでに並べ替え済み
+        self.ordering2_moves_table = {}
 
         self.MAX = 10000#最大を表す(+無限の代わり)
         self.MIN = self.MAX * -1#最小を表す(-無限の代わり)
@@ -51,13 +53,18 @@ class Endgame_AI():
         self.moves.pop(-1)#戻す
         return
 
+    def make_K(self, board):
+        return board_to_sfen(board, 0)
+
     def ordering(self, board):#ポリシー出力を使って手を並び変える
-        K = board.to_line()#Key
+        K = self.make_K(board)
         if K in self.ordering_moves_table.keys():#すでに登録されているか？
             return self.ordering_moves_table[K]#されているなら登録されている値を返す
+        Next_moves = list(board.legal_moves)#合法手のリストを用意
+        if len(Next_moves) == 1:
+            return Next_moves
         F = [self.make_input_feature(board)]#入力特徴量を用意
         policy = self.model.predict(np.array(F), batch_size=len(F))[0][0]#推論
-        Next_moves = list(board.legal_moves)#合法手のリストを用意
         #以下、スマートじゃない方法で並び替え
         output = {}
         for i in range(len(Next_moves)):
@@ -68,6 +75,25 @@ class Endgame_AI():
             ordering_moves.append(output[i][0])
         self.ordering_moves_table[K] = ordering_moves#次回のために登録する
         return ordering_moves
+
+    def ordering2(self, board):#角を先に調べる
+        K = self.make_K(board)
+        if K in self.ordering_moves_table.keys():
+            return self.ordering_moves_table[K]
+        if K in self.ordering2_moves_table.keys():
+            return self.ordering2_moves_table[K]
+        legal_moves = list(board.legal_moves)
+        if len(legal_moves) == 1:
+            return legal_moves
+        yusen = [0, 7, 56, 63]
+        Next_moves = []
+        for i in range(len(yusen)):
+            if yusen[i] in legal_moves:
+                Next_moves.append(yusen[i])
+                legal_moves.remove(yusen[i])
+        Next_moves += legal_moves
+        self.ordering_moves_table[K] = Next_moves
+        return Next_moves
 
     def is_double_pass(self):
         """
@@ -91,12 +117,16 @@ class Endgame_AI():
     def search(self, now_depth):
         if self.board.is_game_over() or self.is_double_pass():#終局
             return self.return_winner()
-        if 64 in list(self.board.legal_moves):#パス
-            return self.return_winner()#仮の処理
         if now_depth <= self.ordering_depth:#move orderingをするか？
             Next_moves = self.ordering(self.board)# move orderingする
         else:#しない
-            Next_moves = list(self.board.legal_moves)#並び変えてないlistを使う
+            #Next_moves = list(self.board.legal_moves)#並び変えてないlistを使う
+            Next_moves = self.ordering2(self.board)
+        if 64 in Next_moves:#パス
+            self.push(64)
+            result = self.search(now_depth + 1)
+            self.pop()
+            return result
         max_score = self.MIN#これまでの最大値
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])#打つ

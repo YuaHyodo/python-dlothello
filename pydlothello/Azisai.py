@@ -12,14 +12,15 @@ HydrangeaはしっくりこないのでAzisaiになった
 
 DEF_MAX_DEPTH = 4#最大Depth
 
-square_weights = np.array([[30, -12, 0, -1, -1, 0, -12, 30],
-                                       [-12, -15, -3, -3, -3, -3, -15, -12],
-                                       [0, -3, 0, -1, -1, 0, -3, 0],
-                                       [-1, -3, -1, -1, -1, -1, -3, -1],
-                                       [-1, -3,-1, -1, -1, -1, -3, -1],
-                                       [0, -3, 0, -1, -1, 0, -3, 0],
-                                       [-12, -15, -3, -3, -3, -3, -15, -12],
-                                       [30, -12, 0, -1, -1, 0, -12, 30]])#マスの重み
+square_weights = np.array([30, -12, 0, -1, -1, 0, -12, 30,
+                                       -12, -15, -3, -3, -3, -3, -15, -12,
+                                       0, -3, 0, -1, -1, 0, -3, 0,
+                                       -1, -3, -1, -1, -1, -1, -3, -1,
+                                       -1, -3,-1, -1, -1, -1, -3, -1,
+                                       0, -3, 0, -1, -1, 0, -3, 0,
+                                       -12, -15, -3, -3, -3, -3, -15, -12,
+                                       30, -12, 0, -1, -1, 0, -12, 30])#マスの重み
+square_weights += 15
 
 class Azisai(BasePlayer):
     name = 'Azisai_v1'
@@ -58,6 +59,7 @@ class Azisai(BasePlayer):
         line = sfen[0:65]
         turn_of = sfen[64]
         self.root_board = reversi.Board(line, d[turn_of])
+        
         return
 
     def position(self, sfen, usi_moves):
@@ -108,11 +110,11 @@ class Azisai(BasePlayer):
         planes = np.empty((2, 8, 8), dtype=np.float32)
         board.piece_planes(planes)#石があるところは1,それ以外は0の配列がそれぞれの手番分得られる
         #以下、計算
-        my = planes[0] * square_weights
-        opponent = (planes[1] * square_weights) * -1
-        my = sum(my.reshape((64,)))
-        opponent = sum(opponent.reshape((64,)))
-        value = my + opponent
+        my_stones = planes[0].ravel()
+        opponent_stones = planes[1].ravel()
+        my = np.dot(my_stones, square_weights)
+        opponent = np.dot(opponent_stones, square_weights)
+        value = my - opponent
         self.NoSearch_table[k] = value
         return value
 
@@ -150,13 +152,18 @@ class Azisai(BasePlayer):
     def Search(self, depth, alpha_beta):
         if self.board.is_game_over():#終局
             return self.return_winner()
-        if (depth >= self.max_depth) or (64 in list(self.board.legal_moves)):#評価
+        if (depth >= self.max_depth):#評価
             return self.eval(self.board)
         max_score = self.MIN#最大スコアをリセット
         if depth <= self.ordering_depth:
             Next_moves = self.ordering()#並べ替え済み合法手を取得
         else:
             Next_moves = list(self.board.legal_moves)
+        if 64 in Next_moves:
+            self.push(64)
+            result = self.Search(depth + 1, alpha_beta)
+            self.pop()
+            return result
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])
             result = self.Search(depth + 1, self.change(alpha_beta)) * -1#自分目線の値
@@ -174,15 +181,20 @@ class Azisai(BasePlayer):
         self.board_history = [self.board.copy()]
         self.moves = []
         alpha_beta = [self.MIN, self.MAX]
+        print('info string no_search_score ' + str(self.eval(self.board)))
         #以下、メイン
         Next_moves = self.ordering()#並べ替え済み合法手を取得
         for i in range(len(Next_moves)):
+            self.board = self.root_board.copy()
+            self.board_history = [self.board.copy()]
+            self.moves = []
             self.push(Next_moves[i])
             result = self.Search(1, self.change(alpha_beta)) * -1#自分目線にする
             if result >= alpha_beta[0]:#今までで最高の結果
                 alpha_beta[0] = result#最高の結果を更新
+                max_score = result
                 bestmove = Next_moves[i]#最前手を更新
-            print('info score ' + str(alpha_beta[0]) + ' pv ' + reversi.move_to_str(bestmove))#現在の最善手等を表示
+            print('info score ' + str(max_score) + ' pv ' + reversi.move_to_str(bestmove))#現在の最善手等を表示
             self.pop()
         return bestmove#最善手を返す
 

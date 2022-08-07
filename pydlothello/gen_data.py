@@ -95,6 +95,7 @@ class gen_data():
         data = []
         moves = []
         while True:
+            print('Black')
             print('')
             print('===board===')
             print(self.board)
@@ -105,14 +106,32 @@ class gen_data():
                 print('random_move')
                 move = np.random.choice(list(self.board.legal_moves))
                 move = reversi.move_to_str(move)
-            elif c % 2 == 1:#黒番
-                print('Black')
+            else:
                 move = self.e1.go(board_to_sfen(self.board, c), [], self.think_time, use_sfen=True)
                 if 'resign' in move:
                     winner = 'W'
                     break
-            else:#白番
-                print('White')
+            data.append({'sfen': board_to_sfen(self.board, c),
+                         'bestmove': move, 'winner': None})#データに加える
+            self.board.move_from_str(move)#打つ
+            moves += [move]#記録
+            if self.board.is_game_over() or (len(moves) >= 2 and moves[-1] == moves[-2]):#終局
+                winner = self.return_winner(self.board)
+                break
+            c += 1
+            #
+            print('White')
+            print('')
+            print('===board===')
+            print(self.board)
+            print('is_black_turn:', self.board.turn)
+            print('piece_sum:', self.board.piece_sum())
+            print('==========')
+            if c <= 8 or self.is_random():#ランダムムーブ
+                print('random_move')
+                move = np.random.choice(list(self.board.legal_moves))
+                move = reversi.move_to_str(move)
+            else:
                 move = self.e2.go(board_to_sfen(self.board, c), [], self.think_time, use_sfen=True)
                 if 'resign' in move:
                     winner = 'B'
@@ -121,10 +140,10 @@ class gen_data():
                          'bestmove': move, 'winner': None})#データに加える
             self.board.move_from_str(move)#打つ
             moves += [move]#記録
-            c += 1
-            if c >= 64 or self.board.is_game_over() or (len(moves) >= 2 and moves[-1] == moves[-2]):#終局
+            if self.board.is_game_over() or (len(moves) >= 2 and moves[-1] == moves[-2]):#終局
                 winner = self.return_winner(self.board)
                 break
+            c += 1
             print('')
         print('終局')
         print('===board===')
@@ -133,6 +152,8 @@ class gen_data():
         print('piece_sum:', self.board.piece_sum())
         print('手番側の石;', self.board.piece_num())
         print('==========')
+        self.e1.Kill()
+        self.e2.Kill()
         for i in range(len(data)):#winnerを書き込む
             data[i]['winner'] = winner
         output = []

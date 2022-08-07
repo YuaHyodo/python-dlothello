@@ -4,6 +4,7 @@ import creversi as reversi
 from base_player import BasePlayer
 from input_features import make_feature
 from tensorflow.keras.models import load_model
+from iroiro.Board_to_sfen import board_to_sfen
 
 from Endgame_AI import Endgame_AI
 
@@ -55,6 +56,7 @@ class MiniMaxPlayer(BasePlayer):
         self.use_time = DEF_USE_TIME
 
         self.ordering_moves_table = {}#すでに並べ替え済み
+        self.ordering2_moves_table = {}
 
         self.MAX = 10000#最大を表す(+無限の代わり)
         self.MIN = self.MAX * -1#最小を表す(-無限の代わり)
@@ -208,6 +210,9 @@ class MiniMaxPlayer(BasePlayer):
         self.board = reversi.Board(self.board_history[-1]['line'], self.board_history[-1]['turn_of'])#盤を戻す
         return
 
+    def make_K(self, board):
+        return board_to_sfen(board, 0)
+
     def is_stop(self):#探索を打ち切るか？
         if not self.stop_OK:
             return False
@@ -232,12 +237,14 @@ class MiniMaxPlayer(BasePlayer):
         return [-AB[1], -AB[0]]
 
     def ordering(self, board):#ポリシー出力を使って手を並び変える
-        K = board.to_line()#Key
+        K = self.make_K(board)#Key
         if K in self.ordering_moves_table.keys():#すでに登録されているか？
             return self.ordering_moves_table[K]#されているなら登録されている値を返す
+        Next_moves = list(board.legal_moves)#合法手のリストを用意
+        if len(Next_moves) == 1:
+            return Next_moves
         F = [make_feature(board)]#入力特徴量を用意
         policy = self.model.predict(np.array(F), batch_size=len(F))[0][0]#推論
-        Next_moves = list(board.legal_moves)#合法手のリストを用意
         #以下、スマートじゃない方法で並び替え
         output = {}
         for i in range(len(Next_moves)):
@@ -245,6 +252,25 @@ class MiniMaxPlayer(BasePlayer):
         ordering_moves = sort_dict(output, reverse=True)
         self.ordering_moves_table[K] = ordering_moves#次回のために登録する
         return ordering_moves
+
+    def ordering2(self, board):#角を先に調べる
+        K = self.make_K(board)
+        if K in self.ordering_moves_table.keys():
+            return self.ordering_moves_table[K]
+        if K in self.ordering2_moves_table.keys():
+            return self.ordering2_moves_table[K]
+        legal_moves = list(board.legal_moves)
+        if len(legal_moves) == 1:
+            return legal_moves
+        yusen = [0, 7, 56, 63]
+        Next_moves = []
+        for i in range(len(yusen)):
+            if yusen[i] in legal_moves:
+                Next_moves.append(yusen[i])
+                legal_moves.remove(yusen[i])
+        Next_moves += legal_moves
+        self.ordering_moves_table[K] = Next_moves
+        return Next_moves
 
     def eval(self, board):
         """
@@ -270,19 +296,24 @@ class MiniMaxPlayer(BasePlayer):
             return self.return_winner()
         if self.is_stop():
             return 'stop'
-        if 64 in list(self.board.legal_moves):#パス
-            return self.return_winner()#仮の処理
         if depth >= self.max_depth:#評価
             return self.eval(self.board)
-        if depth <= int(self.max_depth / 2):
+        if depth <= int(self.max_depth / 4) or depth < 2:
             Next_moves = self.ordering(self.board)
         else:
-            Next_moves = list(self.board.legal_moves)
+            #Next_moves = list(self.board.legal_moves)
+            Next_moves = self.ordering2(self.board)
+        if 64 in Next_moves:
+            self.push(64)
+            result = self.search(depth + 1, AlphaBeta)
+            self.pop()
+            return result
         max_score = self.MIN#これまでの最大値
         for i in range(len(Next_moves)):
             self.push(Next_moves[i])#打つ
             result = self.search(depth + 1, self.change(AlphaBeta))#さらに深く読む
             if self.is_stop():
+                self.pop()
                 return 'stop'
             result *= -1
             if result == self.MAX:#勝った
