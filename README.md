@@ -13,8 +13,10 @@
 # python-dlothelloの詳細
 - python-dlshogi2というPythonで書かれた強い将棋AIを改造し、オセロに対応させた。<br>
 - python-dlshohi2は、「強い将棋ソフトの創りかた」という、このリポジトリを見るような人は絶対に読むべき名著(個人の感想です)のサンプルコードなので、まだ読んでない人は買って読みましょう。<br>
-- python-dlothelloは、やねうらお氏が提案しているUSI-Xプロトコルに対応したUSI-Xエンジンとして利用できる。(詳細な仕様は説明書.txtを見てください)<br>
-- USI-Xについてはこちらを参照のこと: http://yaneuraou.yaneu.com/2022/06/07/standard-communication-protocol-for-games/ <br>
+- python-dlothelloは、やねうらお氏が提案しているUSI-Xプロトコルに対応したUSI-Xエンジンとして利用できる。
+- USI-X(オセロ)の詳細な仕様についてはこちらを参照のこと: https://github.com/YuaHyodo/USI-X-protocol_othello_version
+- USI-Xについてはこちらを参照のこと: http://yaneuraou.yaneu.com/2022/06/07/standard-communication-protocol-for-games
+- 作者(兵頭)が作ったUSI-X(オセロ)の関連ツール等へのリンクは、下の[USI-X(オセロ)の関連リポジトリ]にまとめてみた。
 
 # random_kunの詳細
 - ランダムに手を選ぶUSI-Xエンジン。<br>
@@ -30,6 +32,19 @@
 - Azisaiで生成した教師データ
 - dlreversiという作者が別で作っているオセロAIで生成した教師データ
 - その他にもたくさんあります。
+
+# USI-X(オセロ)の関連リポジトリ
+- USI-Xプロトコル(オセロ)の詳細な仕様等についての文書が置いてあるリポジトリ: https://github.com/YuaHyodo/USI-X-protocol_othello_version
+
+- USI-Xプロトコル(オセロ)に関するサンプルプログラムのリポジトリ: https://github.com/YuaHyodo/USI-X_Othello_Samples
+
+- オンライン対局用プロトコル、Online Othello Protocolのリポジトリ: https://github.com/YuaHyodo/online_othello_protocol
+
+- Online Othello Protocol対応の簡易対局サーバー、Ari-Othello-Serverのリポジトリ: https://github.com/YuaHyodo/Ari-Othello-Server
+
+- USI-XエンジンとOnline Othello Protocolサーバーを中継するGUIを持ったツール、Azisai_Othello_GUIのリポジトリ: https://github.com/YuaHyodo/Azisai_Othello_GUI
+
+- USI-XエンジンをPythonプログラムから呼び出すためのツール、USI_X_Engine_Bridgeのリポジトリ: https://github.com/YuaHyodo/USI_X_Engine_Bridge
 
 
 # その他・お知らせ等
