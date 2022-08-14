@@ -20,9 +20,9 @@ USI-Xのオセロ版の詳細については、こちらを参照のこと; http
 
 base_player.py: USI-Xプロトコル対応プレーヤー(USI-Xエンジン)の土台
 
-Azisai.bat: 基準AI、Azisaiのbatファイル。USI-Xエンジンとして使える。
-
 Azisai.py: 基準AI、Azisaiの本体。
+
+Azisai.bat: 基準AI、Azisaiのbatファイル。USI-Xエンジンとして使える。
 
 mcts_player.py: pv-mctsを使ったオセロAI
 
@@ -53,6 +53,8 @@ USI_X_Engine.py: USI-Xエンジン呼び出しツール(簡易)
 
 engine_invoker.py: エンジンを2つ呼び出して連戦させるツール
 
+Human_vs_AI.py: 人間とUSI-Xエンジンが戦うための簡易ツール
+
 ## その他
 
 ./uct/uct_node.py: mctsで使うノード関連
@@ -67,12 +69,20 @@ engine_invoker.py: エンジンを2つ呼び出して連戦させるツール
 
 ./iroiro/make_random_board.py: テストとかに使うランダム局面を生成する。手数を指定できる。
 
+./othello_sfen_viewer/: sfenをグラフィカルに表示してくれるツールに関するディレクトリ
+
 ## データ
 ./data/Azisai_depth4_data/: Azisaiをdepth4設定で自己対局させて生成したデータ
 ./data/Azisai_depth6_data/: Azisaiをdepth6設定で自己対局させて生成したデータ
 ./data/random_data/: random_kunで生成したデータ
 ./data/dlreversi_selfplay_deth4/: dlreversiという作者(兵頭)が別で作っているオセロAIを
 depth4設定で自己対局させて生成したデータ
+
+===========================================================
+# 使い方
+USI-Xエンジン関連ツールを使うか、Human_vs_AIを使うと対局できる。
+学習は、ディレクトリに使いたい学習データ(形式はgen_data.pyのコメントを参照の事)を入れて、train_NN.pyを起動し、
+学習させたいモデルファイルとさっき用意したデータのディレクトリを指定する事で行える。
 
 ===========================================================
 
