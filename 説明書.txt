@@ -1,63 +1,59 @@
-概要
+# 概要
 python-dlothelloはUSI-Xプロトコルオセロ版対応のオセロAIである。
 python-dlshogi2という将棋AIを改造して作った。
 python-dlshogi2は「強い将棋ソフトの創りかた」という本のサンプルプログラムである。
 このリポジトリを見るような人は絶対に読むべき名著なので、Amazonで探して買って読みましょう。
 
-USI-Xとは
+# USI-Xとは
+
 USI-Xとはやねうらお氏(世界トップクラスの将棋AIのやねうら王の開発者)が提案した「対局ゲーム標準通信プロトコル」である。
+
 詳細はこのリンクを参照のこと: http://yaneuraou.yaneu.com/2022/06/07/standard-communication-protocol-for-games/
 
-===========================================================
-USI-Xオセロ版の詳細
+USI-Xのオセロ版の詳細については、こちらを参照のこと; https://github.com/YuaHyodo/USI-X-protocol_othello_version
 
-このプロトコルでのオセロの盤の座標は以下のようになっている
-|a1|a2|a3|a4|a5|a6|a7|a8|
-|b1|b2|b3|b4|b5|b6|b7|b8|
-|c1|c2|c3|c4|c5|c6|c7|c8|
-|d1|d2|d3|d4|d5|d6|d7|d8|
-|e1|e2|e3|e4|e5|e6|e7|e8|
-|f1|f2|f3|f4|f5|f6|f7|f8|
-|g1|g2|g3|g4|g5|g6|g7|g8|
-|h1|h2|h3|h4|h5|h6|h7|h8|
-手は、石を置くマスの座標で表す。
-パスは"pass"とし、投了は"resign"とする。
-
-
-1|sfenの扱い
-sfen文字列は、1:盤面の状態を表す長さ64の文字列 と、2: 手番を表す長さ1の文字列の合計65文字と、3: 手数を表す数字で構成されている。
-1は、黒石をX、白石をO、空きマスを-で表し、a1, a2, a3, a4, a5, a6, a7, a8, b1, b2, b3, b4, b5, b6, b7, b8, ・・・・・h7, h8の順番に並んでいる。
-2は、現在の手番が黒番だとB、白番だとWとなる。
-3は、1から始まり、どちらかのプレーヤーが行動するたびに+1されていく。
-
-例1_初期局面: ---------------------------OX------XO---------------------------B1
-例2_
-
-2|拡張コマンド
-"score_scale_and_type"コマンド: GUIが評価値の形式とスケールを問い合わせるコマンド("_"を半角スペースなどに変えると動きません)
-
-"scoretype"コマンド: 上の"score_scale_and_type"コマンドに対する応答
-scoretype [形式] min [最小値] max [最大値]と記述する。
-[形式]には["WP"(勝率), 'stone'(石差), 'other'(その他)]のいずれかが入る
 
 ===========================================================
-python-dlothelloのファイルの説明
+# python-dlothelloのファイルの説明
 
-base_player.py: USI-Xプロトコル対応プレーヤーの土台
+## USI-Xエンジン
 
-input_features.py: 入力特徴量関連
+base_player.py: USI-Xプロトコル対応プレーヤー(USI-Xエンジン)の土台
+
+Azisai.bat: 基準AI、Azisaiのbatファイル。USI-Xエンジンとして使える。
+
+Azisai.py: 基準AI、Azisaiの本体。
 
 mcts_player.py: pv-mctsを使ったオセロAI
 
-MCTS.bat: mcts_player.pyを呼び出しやすくするためのbatファイル
+MCTS.bat: mcts_playerのbatファイル。USI-Xエンジンとして使える
+
+minimax_player.py: ディープラーニング系評価関数とαβ法ベースの探索部を持ったオセロAI
+
+MiniMax.bat; minimax_playerのbatファイル。USI-Xエンジンとして使える。
 
 Endgame_AI.py: 最終盤に特化した終局まで読むAI(mcts_playerなどが呼び出す)
 
-USI_X_Engine.py: USI-Xエンジン呼び出しツール(簡易)
+random_kun.py: デバッグなどに使えるランダムムーブをするやつ
+
+random_kun.bat: random_kunのbatファイル。USI-Xエンジンとして使える。
+
+
+## 学習関係
+
+input_features.py: 入力特徴量関連
 
 gen_data.py: USI-Xエンジン同士を対戦させて教師データを作る
 
 train_NN.py: ニューラルネットを訓練する
+
+## 対局ツール
+
+USI_X_Engine.py: USI-Xエンジン呼び出しツール(簡易)
+
+engine_invoker.py: エンジンを2つ呼び出して連戦させるツール
+
+## その他
 
 ./uct/uct_node.py: mctsで使うノード関連
 
@@ -65,13 +61,22 @@ train_NN.py: ニューラルネットを訓練する
 
 ./model/model_files/: モデルファイルを入れておくディレクトリ
 
-./iroiro/Board_to_sfen.py: creversiのBoardをUSI-Xオセロ版のsfenに変換する
+./iroiro/Board_to_sfen.py: creversiのBoardをUSI-Xオセロ版のsfenに変換するツール
 
 ./iroiro/batファイルの型.txt: この中身をコピペしてbatファイルを作ると便利
 
+./iroiro/make_random_board.py: テストとかに使うランダム局面を生成する。手数を指定できる。
+
+## データ
+./data/Azisai_depth4_data/: Azisaiをdepth4設定で自己対局させて生成したデータ
+./data/Azisai_depth6_data/: Azisaiをdepth6設定で自己対局させて生成したデータ
+./data/random_data/: random_kunで生成したデータ
+./data/dlreversi_selfplay_deth4/: dlreversiという作者(兵頭)が別で作っているオセロAIを
+depth4設定で自己対局させて生成したデータ
+
 ===========================================================
-python-dlothelloの今後の予定
+
+# python-dlothelloの今後の予定
 1:ローカルで学習を走らせる
 2:学習データ・学習済みモデルを公開する
-3:Ari shogiのMiniMax系探索部をベースにしてMiniMax系の探索部を作る
-4:リファクタリングしてコードをマシにする
+3:リファクタリングしてコードをマシにする
